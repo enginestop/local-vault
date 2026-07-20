@@ -1,0 +1,32 @@
+# Dependencies
+/node_modules
+
+# Build output
+/dist
+/dist_old
+/backend/localvault/static/
+
+# Runtime data
+/backend/LocalVault-Data/
+
+# Python cache
+__pycache__/
+*.pyc
+/backend/.pytest_cache
+
+# Python virtual env
+/backend/.venv
+
+# Tests
+/backend/tests/
+
+# Dev & agent artifacts
+/.agents
+/.playwright-mcp
+
+# Documentation
+/SRS.md
+/Bug_found_v1.md
+
+# Design mockups
+/mockup-*.png
