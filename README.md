@@ -47,6 +47,14 @@ The server starts on `http://127.0.0.1:8741` by default.
 
 ### Frontend Setup (Development)
 
+Make sure the backend is running first:
+
+```bash
+backend\.venv\Scripts\python.exe backend\run.py
+```
+
+Then in a separate terminal:
+
 ```bash
 npm install
 npm run dev
