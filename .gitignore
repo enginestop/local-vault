@@ -19,6 +19,7 @@ __pycache__/
 
 # Tests
 /backend/tests/
+/backend/pytest.ini
 
 # Dev & agent artifacts
 /.agents
