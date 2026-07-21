@@ -16,13 +16,13 @@ import {
   Tags, Trash2, Upload, Vault, Wifi, X,
 } from 'lucide-react'
 import {
-  ApiError, api, getToken, saveBlob, setToken, websocketUrl,
+  ApiError, api, getCurrentUser, getToken, saveBlob, setCurrentUser, setToken, websocketUrl,
   type BackupItem, type Category, type Credential, type ImportPreview,
   type Lang, type SecurityStatus, type SessionResult, type VaultSettings,
 } from './api'
 import { useI18n } from './i18n'
 
-type Screen = 'boot' | 'app' | 'login' | 'signup' | 'recover' | 'offline'
+type Screen = 'boot' | 'app' | 'login' | 'signup' | 'offline'
 type View = 'vault' | 'favorites' | 'trash' | 'backup' | 'settings'
 type Modal =
   | { kind: 'credential'; credential: Credential | null; generator: boolean }
@@ -195,13 +195,16 @@ export default function App() {
     let cancelled = false
     async function boot(): Promise<void> {
       try {
-        const status = await api.status()
-        if (cancelled) return
-        if (status.setup_required) { bootSettled.current = true; setScreen('signup'); return }
-        if (!getToken()) { bootSettled.current = true; setToken(null); setScreen('login'); return }
-        try { await api.current(); if (!cancelled) { bootSettled.current = true; await enterApp() } }
-        catch { if (!cancelled) { bootSettled.current = true; setToken(null); setScreen('login') } }
-      } catch { if (!cancelled) { bootSettled.current = true; setScreen('offline') } }
+        if (!getToken()) { bootSettled.current = true; setScreen('login'); return }
+        const session = await api.current()
+        if (!cancelled) {
+          bootSettled.current = true
+          setCurrentUser({ username: session.username, email: session.email })
+          await enterApp()
+        }
+      } catch {
+        if (!cancelled) { bootSettled.current = true; setToken(null); setScreen('login') }
+      }
     }
     void boot()
     return () => { cancelled = true }
@@ -209,7 +212,7 @@ export default function App() {
 
   useEffect(() => {
     function ended(): void {
-      setCredentials([]); setCategories([]); setTags([]); setSelectedRows([]); setSelectedId(null); setModal(null); setScreen('login')
+      setCurrentUser(null); setCredentials([]); setCategories([]); setTags([]); setSelectedRows([]); setSelectedId(null); setModal(null); setScreen('login')
     }
     window.addEventListener('localvault:session-ended', ended)
     return () => window.removeEventListener('localvault:session-ended', ended)
@@ -286,17 +289,16 @@ export default function App() {
 
   function handleAuth(result: SessionResult): void {
     setToken(result.token)
-    if (result.recovery_key) {
-      afterRecovery.current = () => void enterApp()
-      setRecoveryKey(result.recovery_key)
-    } else void enterApp()
+    setCurrentUser({ username: result.username || '', email: result.email || '' })
+    if (result.recovery_key) setRecoveryKey(result.recovery_key)
+    void enterApp()
   }
 
   async function lock(): Promise<void> {
     setBusy(true)
     try {
       await api.lock()
-      setToken(null); setCredentials([]); setScreen('login')
+      setToken(null); setCurrentUser(null); setCredentials([]); setScreen('login')
     } catch (error) { announce(`${t('lockUnconfirmed')}: ${errorText(error)}`) }
     finally { setBusy(false) }
   }
@@ -310,10 +312,7 @@ export default function App() {
     if (next === 'backup') void api.backups().then((result) => setBackups(result.items)).catch((error) => announce(errorText(error)))
   }
 
-  if (screen !== 'app') return <>
-    <AuthScreen screen={screen} lang={lang} setLang={setLang} t={t} onSuccess={handleAuth} onScreen={setScreen} retry={() => location.reload()} />
-    {recoveryKey && <RecoveryKeyDialog recoveryKey={recoveryKey} t={t} acknowledge={() => { setRecoveryKey(null); const action = afterRecovery.current; afterRecovery.current = null; action?.() }} />}
-  </>
+  if (screen !== 'app') return <AuthScreen screen={screen} lang={lang} setLang={setLang} t={t} onSuccess={handleAuth} onScreen={setScreen} retry={() => location.reload()} />
 
   return <div className="app-shell">
     <aside className={`sidebar ${mobileNav ? 'open' : ''}`} aria-hidden={isMobile && !mobileNav ? true : undefined} inert={isMobile && !mobileNav ? true : undefined}>
@@ -337,11 +336,16 @@ export default function App() {
     {mobileNav && <button className="nav-scrim" aria-label={t('closeMenu')} onClick={() => setMobileNav(false)} />}
 
     <main className="main-area">
-      <div className="http-banner"><ShieldAlert size={16} /><span><strong>{t('httpBanner')}</strong></span><button onClick={() => setModal({ kind: 'help' })}>{t('learnRisk')}</button></div>
       <header className="topbar">
         <IconButton label={t('openMenu')} className="mobile-menu" onClick={() => setMobileNav(true)}><Menu size={20} /></IconButton>
         <div className="search-wrap"><Search size={18} /><input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('searchPlaceholder')} aria-label={t('searchPlaceholder')} /><kbd>/</kbd>{query && <button onClick={() => setQuery('')} aria-label={t('clear')}><X size={15} /></button>}</div>
-        <div className="top-actions"><span className="connection"><Wifi size={15} /> {t('connected')}</span><IconButton label={t('help')} onClick={() => setModal({ kind: 'help' })}><CircleHelp size={18} /></IconButton><button className="lock-button" disabled={busy} onClick={() => void lock()}><LockKeyhole size={16} /><span>{t('lock')}</span></button></div>
+        <div className="top-actions">
+          {getCurrentUser() && <span className="user-info"><span className="avatar avatar-xs" style={{ background: colorFor(getCurrentUser()!.username) }}>{initials(getCurrentUser()!.username)}</span>{getCurrentUser()!.username}</span>}
+          <span className="connection"><Wifi size={15} /> {t('connected')}</span>
+          <IconButton label={t('help')} onClick={() => setModal({ kind: 'help' })}><CircleHelp size={18} /></IconButton>
+          <button className="lock-button" disabled={busy} onClick={() => void lock()}><LockKeyhole size={16} /><span>{t('lock')}</span></button>
+          <button className="logout-button" disabled={busy} onClick={async () => { try { await api.logout(); setToken(null); setCurrentUser(null); setCredentials([]); setScreen('login') } catch (error) { announce(errorText(error)) } }}>{t('logout')}</button>
+        </div>
       </header>
 
       {view === 'backup'
@@ -374,11 +378,12 @@ export default function App() {
 }
 
 function AuthScreen({ screen, lang, setLang, t, onSuccess, onScreen, retry }: { screen: Screen; lang: Lang; setLang: (lang: Lang) => void; t: (key: any) => string; onSuccess: (result: SessionResult) => void; onScreen: (screen: Screen) => void; retry: () => void }) {
+  const [loginField, setLoginField] = useState('')
+  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [master, setMaster] = useState('')
   const [confirmation, setConfirmation] = useState('')
-  const [recovery, setRecovery] = useState('')
   const [createRecovery, setCreateRecovery] = useState(true)
-  const [riskAck, setRiskAck] = useState(false)
   const [weakAck, setWeakAck] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -386,23 +391,16 @@ function AuthScreen({ screen, lang, setLang, t, onSuccess, onScreen, retry }: { 
   if (screen === 'boot') return <div className="auth-page loading-state"><RefreshCw className="spin" /><p>{t('loading')}</p></div>
   if (screen === 'offline') return <div className="auth-page loading-state"><ShieldAlert /><h1>{t('serverUnavailable')}</h1><button className="primary" onClick={retry}>{t('retry')}</button></div>
   const isLogin = screen === 'login'
-  const isRecover = screen === 'recover'
   const strength = strengthOf(master)
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault(); setBusy(true); setError('')
     try {
-      if (isLogin) onSuccess(await api.unlock(master))
-      else if (isRecover) onSuccess(await api.recover({ recovery_key: recovery, new_master_password: master, confirm_new_master_password: confirmation, weak_password_acknowledged: weakAck }))
-      else onSuccess(await api.setup({ master_password: master, confirm_master_password: confirmation, create_recovery_key: createRecovery, language: lang, weak_password_acknowledged: weakAck, http_lan_risk_acknowledged: riskAck }))
+      if (isLogin) onSuccess(await api.login(loginField, master))
+       else onSuccess(await api.register({ username: username.trim(), email: email.trim().toLowerCase(), master_password: master, confirm_master_password: confirmation, weak_password_acknowledged: weakAck, create_recovery_key: createRecovery, language: lang }))
     } catch (reason) { setError(errorText(reason)) }
     finally { setBusy(false) }
   }
   return <div className="auth-page">
-    <div className="http-banner auth-banner">
-      <ShieldAlert size={16} />
-      <span>{t('httpBannerShort')}</span>
-      <a href="#risk" onClick={(e) => { e.preventDefault(); alert(t('threatModel')) }}>{t('learnRiskLink')}</a>
-    </div>
     <header className="auth-header">
       <div className="brand auth-brand">
         <span className="brand-mark"><LockKeyhole size={20} /></span>
@@ -411,13 +409,12 @@ function AuthScreen({ screen, lang, setLang, t, onSuccess, onScreen, retry }: { 
       <div className="auth-connection">
         <Wifi size={16} />
         <span>{t('hostLocalActive')}</span>
-        <strong>192.168.1.24:8080</strong>
       </div>
     </header>
     <main className="auth-layout">
       <section className="auth-intro">
         <p className="auth-kicker">VAULT PRIBADI · TANPA CLOUD</p>
-        <h1>{isLogin ? t('welcomeBack') : isRecover ? t('recover') : t('appName')}</h1>
+        <h1>{isLogin ? t('welcomeBack') : t('appName')}</h1>
         <p className="auth-lead">{t('openEncryptedVault')}</p>
         <div className="auth-vault-visual">
           <span className="auth-vault-ring"><LockKeyhole size={24} /></span>
@@ -434,71 +431,85 @@ function AuthScreen({ screen, lang, setLang, t, onSuccess, onScreen, retry }: { 
       </section>
       <section className="auth-card">
         <div className="auth-card-heading">
-          <span className="auth-mode-badge">{isRecover ? 'RECOVERY' : isLogin ? t('loginBadge') : 'DAFTAR'}</span>
-          <h2>{isRecover ? t('recover') : isLogin ? t('loginTitle') : t('signupTitle')}</h2>
+          <span className="auth-mode-badge">{isLogin ? t('loginBadge') : t('registerBadge')}</span>
+          <h2>{isLogin ? t('loginTitle') : t('signupTitle')}</h2>
           {isLogin && <p>{t('loginSubtitle')}</p>}
         </div>
-        {isLogin && (
-          <div className="auth-vault-status">
-            <span><ArchiveRestore size={18} /></span>
-            <div>
-              <strong>{t('vaultFound')}</strong>
-              <small>{t('vaultRevisionInfo')}</small>
-            </div>
-            <Check size={16} className="status-check" />
-          </div>
-        )}
         <form className="auth-form" onSubmit={(event) => void submit(event)}>
-          {isRecover && <label><span>{t('recoveryKey')}</span><div className="auth-input"><KeyRound size={18} /><input required value={recovery} onChange={(event) => setRecovery(event.target.value)} /></div></label>}
-          <label>
-            <span>{isRecover ? t('newMaster') : t('masterPassword')}</span>
-            <div className="auth-input">
-              <LockKeyhole size={18} />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                required
-                placeholder={isLogin ? t('enterMasterPasswordPlaceholder') : ''}
-                value={master}
-                onChange={(event) => setMaster(event.target.value)}
-              />
-              <button
-                type="button"
-                className="password-toggle"
-                onClick={() => setShowPassword(!showPassword)}
-                aria-label="Toggle password"
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </label>
-          {!isLogin && <><label><span>{t('confirmMaster')}</span><div className="auth-input"><ShieldCheck size={18} /><input type="password" required value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></div></label><div className="strength-row"><span>{t('passwordStrength')}</span><strong>{t(strength)}</strong></div>{strength === 'weak' && <label className="auth-check"><input type="checkbox" checked={weakAck} onChange={(event) => setWeakAck(event.target.checked)} /><span>{t('weakPasswordAck')}</span></label>}</>}
-          {screen === 'signup' && <><label className="auth-check"><input type="checkbox" checked={createRecovery} onChange={(event) => setCreateRecovery(event.target.checked)} /><span>{t('createRecovery')}</span></label><label className="auth-check"><input type="checkbox" required checked={riskAck} onChange={(event) => setRiskAck(event.target.checked)} /><span>{t('understandRisk')}</span></label><label className="auth-select"><span>{t('language')}</span><select value={lang} onChange={(event) => setLang(event.target.value as Lang)}><option value="id">Bahasa Indonesia</option><option value="en">English</option></select></label></>}
-          {isLogin && (
-            <div className="auth-form-options">
-              <label className="auth-inline-check">
-                <input type="checkbox" defaultChecked />
-                <span>{t('rememberTabConnected')}</span>
+          {isLogin ? (
+            <>
+              <label>
+                <span>{t('usernameLabel')}</span>
+                <div className="auth-input">
+                  <KeyRound size={18} />
+                  <input required value={loginField} onChange={(event) => setLoginField(event.target.value)} placeholder="username@example.com" />
+                </div>
               </label>
-              <button type="button" className="auth-recovery-link" onClick={() => onScreen('recover')}>
-                <KeyRound size={15} />
-                <span>{t('useRecovery')}</span>
-              </button>
-            </div>
+              <label>
+                <span>{t('masterPassword')}</span>
+                <div className="auth-input">
+                  <LockKeyhole size={18} />
+                  <input type={showPassword ? 'text' : 'password'} required value={master} onChange={(event) => setMaster(event.target.value)} placeholder={t('enterMasterPasswordPlaceholder')} />
+                  <button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)} aria-label="Toggle password">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+                </div>
+              </label>
+              <div className="auth-form-options">
+                <label className="auth-inline-check">
+                  <input type="checkbox" defaultChecked />
+                  <span>{t('rememberTabConnected')}</span>
+                </label>
+              </div>
+            </>
+          ) : (
+            <>
+              <label>
+                <span>{t('usernameLabel')}</span>
+                <div className="auth-input">
+                  <KeyRound size={18} />
+                  <input required value={username} onChange={(event) => setUsername(event.target.value)} />
+                </div>
+              </label>
+              <label>
+                <span>{t('emailLabel')}</span>
+                <div className="auth-input">
+                  <KeyRound size={18} />
+                  <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="opsional" />
+                </div>
+              </label>
+              <label>
+                <span>{t('masterPassword')}</span>
+                <div className="auth-input">
+                  <LockKeyhole size={18} />
+                  <input type={showPassword ? 'text' : 'password'} required value={master} onChange={(event) => setMaster(event.target.value)} />
+                  <button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)} aria-label="Toggle password">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+                </div>
+              </label>
+              <label>
+                <span>{t('confirmMaster')}</span>
+                <div className="auth-input">
+                  <ShieldCheck size={18} />
+                  <input type="password" required value={confirmation} onChange={(event) => setConfirmation(event.target.value)} />
+                </div>
+              </label>
+              <div className="strength-row"><span>{t('passwordStrength')}</span><strong>{t(strength)}</strong></div>
+              {strength === 'weak' && <label className="auth-check"><input type="checkbox" checked={weakAck} onChange={(event) => setWeakAck(event.target.checked)} /><span>{t('weakPasswordAck')}</span></label>}
+              <label className="auth-check"><input type="checkbox" checked={createRecovery} onChange={(event) => setCreateRecovery(event.target.checked)} /><span>{t('createRecovery')}</span></label>
+              <label className="auth-select"><span>{t('language')}</span><select value={lang} onChange={(event) => setLang(event.target.value as Lang)}><option value="id">Bahasa Indonesia</option><option value="en">English</option></select></label>
+            </>
           )}
           {error && <p className="form-error">{error}</p>}
           <button className="primary auth-submit" disabled={busy || (!isLogin && strength === 'weak' && !weakAck)}>
             <LockKeyhole size={16} />
-            <span>{busy ? t('working') : isLogin ? t('openVault') : isRecover ? t('recover') : t('createOpen')}</span>
+            <span>{busy ? t('working') : isLogin ? t('openVault') : t('createOpen')}</span>
           </button>
         </form>
         <div className="auth-card-footer">
-          {isLogin && (
+          {isLogin ? (
             <p className="auth-switch-text">
               <span>{t('notConfiguredYet')}</span>
               <button type="button" className="link-action" onClick={() => onScreen('signup')}>{t('createNewVaultLink')}</button>
             </p>
-          )}
-          {isRecover && (
+          ) : (
             <button type="button" className="link-button" onClick={() => onScreen('login')}>{t('switchToLogin')}</button>
           )}
         </div>
@@ -593,7 +604,7 @@ function ExportDialog({ t, close, announce, filter, selectedIds }: { t: (key: an
     const data = new FormData(event.currentTarget)
     try { const scope = String(data.get('scope')); const result = await api.exportVault({ master_password: data.get('password'), profile: data.get('profile'), scope, filter, selected_ids: scope === 'selected' ? selectedIds : [] }); saveBlob(result); announce(t('exportSuccess')); close() } catch (error) { announce(errorText(error)) } finally { setBusy(false) }
   }
-  return <NativeDialog title={t('export')} close={close} busy={busy}><form className="modal-form" onSubmit={(event) => void submit(event)}><div className="plaintext-warning"><ShieldAlert size={18} /><div><strong>{t('plaintextWarning')}</strong><span>{t('plaintextDetail')}</span></div></div><label>{t('profile')}<select name="profile"><option value="spreadsheet">{t('spreadsheet')}</option><option value="chromium">Chromium</option><option value="firefox">Firefox</option></select></label><label>{t('scope')}<select name="scope"><option value="all">{t('all')}</option><option value="filtered">{t('filtered')}</option>{selectedIds.length > 0 && <option value="selected">{t('selectedItems')}</option>}</select></label><label>{t('confirmExport')}<input type="password" name="password" required /></label><div className="modal-actions"><button type="button" className="secondary" onClick={close}>{t('cancel')}</button><button className="primary" disabled={busy}>{t('export')}</button></div></form></NativeDialog>
+  return <NativeDialog title={t('export')} close={close} busy={busy}><form className="modal-form" onSubmit={(event) => void submit(event)}><div className="plaintext-warning"><ShieldAlert size={18} /><div><strong>{t('plaintextWarning')}</strong><span>{t('plaintextDetail')}</span></div></div><label>{t('exportFormat')}<select name="profile"><option value="spreadsheet">{t('spreadsheet')}</option><option value="chromium">Chromium</option><option value="firefox">Firefox</option></select></label><label>{t('scope')}<select name="scope"><option value="all">{t('all')}</option><option value="filtered">{t('filtered')}</option>{selectedIds.length > 0 && <option value="selected">{t('selectedItems')}</option>}</select></label><label>{t('confirmExport')}<input type="password" name="password" required /></label><div className="modal-actions"><button type="button" className="secondary" onClick={close}>{t('cancel')}</button><button className="primary" disabled={busy}>{t('export')}</button></div></form></NativeDialog>
 }
 
 function ImportDialog({ t, close, announce, saved }: { t: (key: any) => string; close: () => void; announce: (value: string) => void; saved: () => Promise<void> }) {
@@ -652,11 +663,11 @@ function SettingsView({ lang, settings, categories, tags, vaultRevision, t, anno
   async function createTag(): Promise<void> { const name = prompt(t('createTag')); if (!name) return; try { await api.createTag(name); await reload() } catch (error) { announce(errorText(error)) } }
   return <div className="single-page settings-page"><div className="page-heading"><h1>{t('settings')}</h1></div>{loadError && <div className="form-error">{loadError}<button onClick={() => void load()}>{t('retry')}</button></div>}<div className="settings-layout"><nav className="settings-nav">{(['general', 'security', 'master', 'host', 'backup'] as const).map((key) => <button key={key} className={section === key ? 'active' : ''} onClick={() => setSection(key)}>{t(key === 'master' ? 'masterRecovery' : key === 'host' ? 'hostNetwork' : key)}</button>)}</nav><div className="settings-content">
     {section === 'general' && <section className="card setting-section"><div className="card-title"><h2>{t('general')}</h2></div><div className="setting-row"><strong>{t('language')}</strong><select value={draftLang} onChange={(event) => setDraftLang(event.target.value as Lang)}><option value="id">Bahasa Indonesia</option><option value="en">English</option></select></div><div className="setting-row"><strong>{t('tagFilterMode')}</strong><select value={tagMode} onChange={(event) => setTagMode(event.target.value as 'and' | 'or')}><option value="and">AND</option><option value="or">OR</option></select></div><div className="setting-row"><strong>{t('itemsPerPage')}</strong><select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value) as 25 | 50 | 100)}><option>25</option><option>50</option><option>100</option></select></div><div className="setting-row"><div><strong>{t('category')} <button onClick={() => void createCategory()}>{t('create')}</button></strong>{categories.map((category) => <span key={category.id}>{category.name} <button onClick={() => void renameCategory(category)}>{t('rename')}</button> <button onClick={() => void removeCategory(category)}>{t('delete')}</button></span>)}</div></div><div className="setting-row"><div><strong>{t('tags')} <button onClick={() => void createTag()}>{t('create')}</button></strong>{tags.map((tag) => <span key={tag}>{tag} <button onClick={() => void renameTag(tag)}>{t('rename')}</button> <button onClick={() => void removeTag(tag)}>{t('delete')}</button></span>)}</div></div><button className="primary save-settings" disabled={busy} onClick={() => void saveGeneral()}>{t('saveSettings')}</button></section>}
-    {section === 'security' && <section className="card setting-section"><div className="card-title"><h2>{t('security')}</h2></div>{security && <div className="setting-row"><div><strong>{security.kdf_algorithm}</strong><span>m={security.kdf_m_cost_kib}, t={security.kdf_t_cost}, p={security.kdf_parallelism}</span></div><span>{security.recovery_enabled ? t('recoveryEnabled') : t('recoveryDisabled')}</span></div>}<div className="plaintext-warning"><ShieldAlert /><div><strong>{t('httpBanner')}</strong><span>{t('noThrottleWarning')}</span></div></div></section>}
+    {section === 'security' && <section className="card setting-section"><div className="card-title"><h2>{t('security')}</h2></div>{security && <div className="setting-row"><div><strong>{security.kdf_algorithm}</strong><span>m={security.kdf_m_cost_kib}, t={security.kdf_t_cost}, p={security.kdf_parallelism}</span></div><span>{security.recovery_enabled ? t('recoveryEnabled') : t('recoveryDisabled')}</span></div>}</section>}
     {section === 'master' && <section className="card setting-section"><div className="card-title"><h2>{t('masterRecovery')}</h2></div><div className="modal-form"><label>{t('currentMaster')}<input type="password" value={current} onChange={(event) => setCurrent(event.target.value)} /></label><label>{t('newMaster')}<input type="password" value={next} onChange={(event) => setNext(event.target.value)} /></label><label>{t('confirmNewMaster')}<input type="password" value={confirmNext} onChange={(event) => setConfirmNext(event.target.value)} /></label>{strengthOf(next) === 'weak' && <label><input type="checkbox" checked={weakAck} onChange={(event) => setWeakAck(event.target.checked)} />{t('weakPasswordAck')}</label>}<button className="primary" disabled={busy} onClick={() => void changeMaster()}>{t('changeMaster')}</button>{security?.recovery_enabled ? <><button className="secondary" disabled={busy} onClick={() => void recoveryAction('rotate')}>{t('rotateRecovery')}</button><button className="danger-outline" disabled={busy} onClick={() => void recoveryAction('disable')}>{t('disableRecovery')}</button></> : <button className="secondary" disabled={busy} onClick={() => void recoveryAction('enable')}>{t('enableRecovery')}</button>}<label>{t('resetPhrase')}<input value={resetPhrase} onChange={(event) => setResetPhrase(event.target.value)} /></label><button className="danger-outline" disabled={busy} onClick={() => void reset()}>{t('resetVault')}</button></div></section>}
     {section === 'host' && host && <section className="card setting-section"><div className="card-title"><h2>{t('hostNetwork')}</h2></div><div className="setting-row"><strong>{t('port')}</strong><input type="number" min="1024" max="65535" value={host.port} onChange={(event) => setHost({ ...host, port: Number(event.target.value) })} /></div><div className="setting-row"><strong>{t('autostart')}</strong><input type="checkbox" checked={host.autostart} onChange={(event) => setHost({ ...host, autostart: event.target.checked })} /></div><div className="setting-row"><span>0.0.0.0 · {t('lanDefault')}</span></div><button className="primary save-settings" disabled={busy} onClick={() => void saveHost()}>{t('save')}</button></section>}
     {section === 'backup' && <section className="card setting-section"><div className="card-title"><h2>{t('backup')}</h2></div><button className="primary" onClick={navigateBackup}>{t('openBackup')}</button></section>}
   </div></div></div>
 }
 
-function HelpDialog({ t, close }: { t: (key: any) => string; close: () => void }) { return <NativeDialog title={t('help')} close={close}><div className="modal-form"><div className="plaintext-warning"><ShieldAlert /><div><strong>{t('httpBanner')}</strong><span>{t('threatModel')}</span></div></div><h3>{t('shortcuts')}</h3><p><kbd>/</kbd> {t('focusSearch')}</p><p><kbd>Ctrl/Cmd+N</kbd> {t('newCredential')}</p><p><kbd>Ctrl/Cmd+K</kbd> {t('openHelp')}</p><p><kbd>?</kbd> {t('help')}</p><div className="modal-actions"><button className="primary" onClick={close}>{t('close')}</button></div></div></NativeDialog> }
+function HelpDialog({ t, close }: { t: (key: any) => string; close: () => void }) { return <NativeDialog title={t('help')} close={close}><div className="modal-form"><h3>{t('shortcuts')}</h3><p><kbd>/</kbd> {t('focusSearch')}</p><p><kbd>Ctrl/Cmd+N</kbd> {t('newCredential')}</p><p><kbd>Ctrl/Cmd+K</kbd> {t('openHelp')}</p><p><kbd>?</kbd> {t('help')}</p><div className="modal-actions"><button className="primary" onClick={close}>{t('close')}</button></div></div></NativeDialog> }

@@ -1,7 +1,10 @@
 import os
 import shutil
+import asyncio
+from uuid import uuid4
 
 import pytest
+import asyncpg
 
 BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -14,17 +17,66 @@ def data_dir(tmp_path):
     shutil.rmtree(d, ignore_errors=True)
 
 
+async def _create_schema(database_url: str, schema: str) -> None:
+    conn = await asyncpg.connect(database_url, timeout=1)
+    try:
+        await conn.execute(f'CREATE SCHEMA "{schema}"')
+    finally:
+        await conn.close()
+
+
+async def _drop_schema(database_url: str, schema: str) -> None:
+    conn = await asyncpg.connect(database_url, timeout=1)
+    try:
+        await conn.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+    finally:
+        await conn.close()
+
+
+async def _check_database(database_url: str) -> None:
+    conn = await asyncpg.connect(database_url, timeout=1)
+    await conn.close()
+
+
 @pytest.fixture
-def client(data_dir):
+def postgres_available():
+    database_url = os.environ.get(
+        "DATABASE_URL",
+        "postgresql://localvault:localvault@localhost:5432/localvault",
+    )
+    try:
+        asyncio.run(_check_database(database_url))
+    except (OSError, asyncpg.PostgresError):
+        return False
+    return True
+
+
+@pytest.fixture
+def client(data_dir, monkeypatch, postgres_available):
     import sys
 
+    if not postgres_available:
+        pytest.skip("PostgreSQL is required for backend integration tests")
     sys.path.insert(0, BACKEND_ROOT)
+    database_url = os.environ.get(
+        "DATABASE_URL",
+        "postgresql://localvault:localvault@localhost:5432/localvault",
+    )
+    schema = f"test_{uuid4().hex}"
+    try:
+        asyncio.run(_create_schema(database_url, schema))
+    except (OSError, asyncpg.PostgresError) as exc:
+        pytest.skip(f"PostgreSQL is required for backend integration tests: {exc}")
+    monkeypatch.setenv("DATABASE_SCHEMA", schema)
     from fastapi.testclient import TestClient
     from localvault.main import create_app
 
     app = create_app(data_dir)
-    with TestClient(app, base_url="http://127.0.0.1") as c:
-        yield c
+    try:
+        with TestClient(app, base_url="http://127.0.0.1") as c:
+            yield c
+    finally:
+        asyncio.run(_drop_schema(database_url, schema))
 
 
 def setup_vault(client, master_password="test123", language="id"):

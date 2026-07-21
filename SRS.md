@@ -20,7 +20,7 @@ Kata **HARUS**, **TIDAK BOLEH**, **SEBAIKNYA**, dan **BOLEH** menunjukkan tingka
 
 ### 1.2 Ruang lingkup produk
 
-LocalVault adalah password manager lokal untuk satu pengguna. Satu proses host menyimpan satu vault dan melayani banyak tab atau perangkat klien pada LAN melalui aplikasi web. Produk didistribusikan sebagai paket portable untuk Windows, macOS, dan Linux, tanpa layanan cloud dan tanpa kebutuhan instalasi Python atau Node.js pada komputer pengguna.
+LocalVault adalah password manager lokal dengan akun pengguna dan satu vault per pengguna. Satu proses host menyimpan envelope vault terenkripsi di PostgreSQL dan melayani banyak tab atau perangkat klien pada LAN melalui aplikasi web. Produk didistribusikan sebagai aplikasi host portable untuk Windows, macOS, dan Linux; PostgreSQL harus tersedia pada deployment host.
 
 Nilai utama produk adalah:
 
@@ -99,7 +99,7 @@ Semua persyaratan v1 pada dokumen ini berprioritas **Must** kecuali dinyatakan l
 │                                        │                 │
 │                             encrypted envelope only      │
 │                                        ▼                 │
-│              LocalVault-Data/{SQLite,backup,config,log}  │
+│              PostgreSQL + LocalVault-Data/{backup,config,log} │
 └───────────────────────────────┬──────────────────────────┘
                                 │ HTTP/WS pada LAN
                  ┌──────────────┼──────────────┐
@@ -148,9 +148,9 @@ Multi-user, role, sharing, cloud sync, browser extension, autofill, HTTPS, TOTP,
 
 | ID | Persyaratan |
 |---|---|
-| PRD-001 | Backend HARUS menggunakan Python dan FastAPI; penyimpanan HARUS menggunakan SQLite; frontend HARUS menggunakan React dan TypeScript; antarmuka aplikasi HARUS REST JSON dan WebSocket. |
+| PRD-001 | Backend HARUS menggunakan Python dan FastAPI; penyimpanan HARUS menggunakan PostgreSQL melalui asyncpg; frontend HARUS menggunakan React dan TypeScript; antarmuka aplikasi HARUS REST JSON dan WebSocket. |
 | PRD-002 | Build frontend teroptimasi HARUS dibundel sebagai aset backend dan dilayani dari origin serta port yang sama. |
-| PRD-003 | Tidak boleh ada ketergantungan runtime pada CDN, koneksi internet, instalasi Python, instalasi Node.js, package manager, atau database eksternal. |
+| PRD-003 | Tidak boleh ada ketergantungan runtime pada CDN, koneksi internet, instalasi Python, instalasi Node.js, atau package manager. PostgreSQL adalah dependency runtime resmi dan dikonfigurasi melalui `DATABASE_URL`. |
 | PRD-004 | Release HARUS menghasilkan artefak portable terpisah untuk Windows, macOS, dan Linux dari runner OS yang sama dengan target. |
 | PRD-005 | Launcher HARUS menjalankan satu instance server, menampilkan tray menu, membuka browser default, dan menghentikan server secara tertib. |
 | PRD-006 | Server HARUS bind pada `0.0.0.0` menggunakan HTTP IPv4 dengan port persisten. Port awal v1 HARUS `8741`, disimpan di `config.json`, dan tidak boleh berpindah otomatis jika port sedang dipakai. |
@@ -169,7 +169,6 @@ Struktur direktori normatif:
 ├── LocalVault[.exe atau launcher platform]
 └── LocalVault-Data/
     ├── config.json
-    ├── vault.sqlite3
     ├── backups/
     ├── logs/
     └── localvault.lock
@@ -370,7 +369,7 @@ Peringatan ini bukan alasan untuk menurunkan kontrol data-at-rest di bawah ini.
 | ID | Persyaratan |
 |---|---|
 | SEC-019 | Nama, URL, username, password, kategori, tag, favorit, catatan, custom field, history, timestamp item, filter tersimpan, dan general settings pengguna HARUS berada di ciphertext payload. |
-| SEC-020 | SQLite dan backup TIDAK BOLEH memiliki kolom atau indeks plaintext untuk field Credential, Category, tag, history, atau custom field. |
+| SEC-020 | PostgreSQL dan backup TIDAK BOLEH memiliki kolom atau indeks plaintext untuk field Credential, Category, tag, history, atau custom field. |
 | SEC-021 | Plaintext payload, DEK, KEK, master password, dan recovery seed hanya BOLEH berada di memori proses/tab yang memerlukannya dan HARUS dihapus secara best-effort saat lock, sesi terakhir berakhir, restore, reset, atau shutdown. |
 | SEC-022 | Master password dan recovery key harus ditampung sesingkat mungkin dalam buffer mutable bila runtime memungkinkan; referensi harus dilepas dan buffer di-zeroize best-effort. Tidak ada klaim penghapusan sempurna pada Python, JavaScript, swap, atau garbage collector. |
 | SEC-023 | Semua response API, termasuk error, HARUS memakai `Cache-Control: no-store`. Response secret tidak boleh dimasukkan service worker/cache aplikasi. LocalVault TIDAK BOLEH mendaftarkan service worker. |
@@ -463,7 +462,7 @@ Tema tidak disimpan sebagai pilihan karena selalu mengikuti `prefers-color-schem
 
 ### 8.7 Entity `VaultEnvelope`
 
-Field ini adalah satu row aktif di SQLite dan seluruh nilai binary disimpan sebagai BLOB, bukan Base64.
+Field ini adalah satu row aktif di PostgreSQL dan seluruh nilai binary disimpan sebagai `bytea`, bukan Base64.
 
 | Field | Tipe | Rahasia saat disimpan |
 |---|---|---|
@@ -524,15 +523,16 @@ Entity hanya ada di memori server.
 
 File `.lvbak` HARUS merupakan container versioned berisi manifest UTF-8 dan bytes `VaultEnvelope`; parser memakai length-prefix dan magic `LOCALVAULT_BACKUP\0` sehingga tidak bergantung pada ekstensi.
 
-### 8.11 Skema SQLite yang diizinkan
+### 8.11 Skema PostgreSQL yang diizinkan
 
 | Table | Isi yang diizinkan |
 |---|---|
-| `app_meta` | schema container, flag `setup_completed`, application migration state |
-| `vault_envelope` | tepat satu `VaultEnvelope` aktif |
-| `backup_index` | `BackupManifest`, path relatif, status validasi, bucket retensi |
+| `app_meta` | schema container dan application migration state |
+| `users` | identitas akun dan password hash Argon2id, tanpa isi vault |
+| `vault_envelopes` | satu `VaultEnvelope` aktif per user |
+| `backup_index` | `BackupManifest`, user, path relatif, status validasi, bucket retensi |
 
-Tidak boleh ada table credential/category/tag/history/session/import plaintext. SQLite HARUS memakai `journal_mode=DELETE`, `synchronous=FULL`, `foreign_keys=ON`, dan transaksi `BEGIN IMMEDIATE` untuk mutasi. WAL tidak dipakai agar tidak ada state vault di file `-wal`/`-shm` yang dapat tertinggal saat folder portable dipindahkan.
+Tidak boleh ada table credential/category/tag/history/session/import plaintext. PostgreSQL HARUS memakai transaksi untuk perubahan envelope dan index backup; isi payload rahasia hanya boleh berada pada kolom ciphertext `bytea`.
 
 ## 9. Kontrak antarmuka
 
@@ -689,7 +689,7 @@ List Credential HARUS mengembalikan field yang diperlukan tabel tetapi boleh men
 | OPS-007 | `config.json` hanya boleh berisi data non-rahasia: format version, port, language pre-unlock, autostart preference, log level, dan instance ID. Perubahan port berlaku setelah restart dan divalidasi 1024–65535. |
 | OPS-008 | Log default level `INFO`, satu file aktif maksimum 5 MiB, rotasi maksimal 7 file, UTF-8, dan timestamp UTC. Debug logging release tidak boleh menonaktifkan redaction SEC-028. |
 | OPS-009 | Launcher dan server HARUS berada dalam satu OS process: tray/event loop native di main thread dan FastAPI server di worker thread yang disupervisi. Readiness/health dikirim melalui in-process queue dan tidak diekspos sebagai endpoint kontrol. Tray menandai status `starting`, `ready`, `locked/unlocked`, atau `error`. |
-| OPS-010 | Startup HARUS menjalankan urutan: resolve data dir, acquire OS lock, uji writability, baca/validasi config, buka dan integrity-check SQLite, selesaikan recovery file atomik bila ada, jalankan migrasi aman, purge Trash jatuh tempo, bind server, lalu tandai ready. |
+| OPS-010 | Startup HARUS menjalankan urutan: resolve data dir, acquire OS lock, uji writability, baca/validasi config, koneksi dan migrasi schema PostgreSQL, purge Trash jatuh tempo, bind server, lalu tandai ready. |
 | OPS-011 | Jika vault atau config korup, server tidak boleh membuat vault pengganti diam-diam. Launcher harus berhenti pada safe error state dan mengarahkan pengguna ke restore/log. |
 | OPS-012 | Access log HARUS mencatat route template, bukan URL mentah yang berpotensi memuat ticket atau nama tag. |
 | OPS-013 | Tray, native notification, startup error, dan dialog launcher HARUS tersedia dalam Indonesia/English, memakai language terakhir di `config.json`, dan default Indonesia. Label OPS-001 adalah versi Indonesia; locale English memakai padanan makna yang setara. |
@@ -705,14 +705,14 @@ List Credential HARUS mengembalikan field yang diperlukan tabel tetapi boleh men
 | Session Manager | Token digest in-memory, kepemilikan tab, reconnect grace, lock satu/semua, best-effort clearing. |
 | Vault Application Service | Use case, permission state, optimistic concurrency, validation, transaksi dan revision. |
 | Crypto Adapter | Argon2id, AES-GCM, HKDF, recovery format/checksum, CSPRNG, zeroization best-effort. |
-| Vault Repository | Satu encrypted envelope di SQLite, metadata schema, atomic candidate/commit. |
+| Vault Repository | Satu encrypted envelope per user di PostgreSQL, metadata schema, atomic candidate/commit. |
 | In-memory Vault Index | Model plaintext unlocked, search/filter/sort; tidak pernah diserialisasi di luar ciphertext/export eksplisit. |
 | Import/Export Service | Parser fixture-based, mapping/preview/conflict, streaming CSV, formula mitigation. |
 | Backup Manager | Container/manifest, snapshot, retensi, validate, pre-operation, atomic restore. |
 | Event Broker | Event non-rahasia setelah commit, WebSocket broadcast, revision gap/reload. |
 | React SPA | State/UI responsive, i18n, masking/copy fallback, form/conflict, sessionStorage. |
 
-Dependency HARUS mengarah dari presentation menuju application service, lalu port crypto/repository/backup; domain tidak boleh bergantung pada FastAPI, SQLite, tray toolkit, atau React.
+Dependency HARUS mengarah dari presentation menuju application service, lalu port crypto/repository/backup; domain tidak boleh bergantung pada FastAPI, PostgreSQL, tray toolkit, atau React.
 
 ### 12.2 Alur unlock
 
@@ -732,15 +732,15 @@ validasi sesi + If-Match
   → clone state revision N
   → terapkan/validasi domain menjadi N+1
   → serialisasi kanonik + nonce baru + AES-GCM
-  → BEGIN IMMEDIATE SQLite, stage envelope N+1
+  → PostgreSQL transaction, stage envelope N+1
   → tulis/fsync/atomic-rename backup N+1
-  → COMMIT SQLite
+  → COMMIT PostgreSQL
   → swap state in-memory
   → broadcast event revision N+1
   → terapkan retensi secara best-effort
 ```
 
-Jika proses gagal sebelum commit SQLite, state N tetap otoritatif dan backup kandidat menjadi orphan yang diabaikan/dibersihkan saat startup. Jika commit berhasil tetapi broadcast gagal, client menemukan gap melalui `vault_revision`. Penghapusan backup karena retensi tidak boleh membatalkan mutasi yang sudah commit; kegagalannya dicatat dan dicoba lagi.
+Jika proses gagal sebelum commit PostgreSQL, state N tetap otoritatif dan backup kandidat menjadi orphan yang diabaikan/dibersihkan saat startup. Jika commit berhasil tetapi broadcast gagal, client menemukan gap melalui `vault_revision`. Penghapusan backup karena retensi tidak boleh membatalkan mutasi yang sudah commit; kegagalannya dicatat dan dicoba lagi.
 
 ### 12.4 Alur restore
 
@@ -762,7 +762,7 @@ Jika proses gagal sebelum commit SQLite, state N tetap otoritatif dan backup kan
 
 ### 12.6 Dependency dan build policy
 
-- Versi Python, Node.js build-time, FastAPI, React, TypeScript, SQLite binding, Argon2, crypto, CSV parser, tray toolkit, dan PyInstaller HARUS dipin tepat di lockfile release.
+- Versi Python, Node.js build-time, FastAPI, React, TypeScript, asyncpg, PostgreSQL client, Argon2, crypto, CSV parser, tray toolkit, dan PyInstaller HARUS dipin tepat di lockfile release.
 - Software bill of materials dan checksum SHA-256 HARUS dihasilkan per artefak.
 - Frontend dibangun lebih dahulu; output hashed asset disalin ke resource backend; PyInstaller kemudian membundel backend, launcher, library native, dan aset.
 - Pipeline terpisah menjalankan build/test di Windows, macOS, dan Linux. Cross-compilation PyInstaller tidak diterima sebagai bukti kompatibilitas.
@@ -954,7 +954,7 @@ Perangkat referensi minimum adalah host 64-bit dengan 4 logical CPU ≥2,0 GHz, 
 | AT-SEC-05 | Instrumentasi CSPRNG production adapter pada 100.000 enkripsi payload/wrap | Seluruh nonce 96-bit untuk key yang sama unik, panjang benar, dan generator hanya memakai sumber OS; test juga membuktikan nonce aktif yang disuntik ulang ditolak. |
 | AT-SEC-06 | Vault berisi marker secret; ganti master | DEK logical sama, payload ciphertext+nonce byte-identik, salt/wrapped master/nonce berubah; master lama gagal, baru berhasil. |
 | AT-SEC-07 | Recovery aktif | Recovery mengganti master, menghasilkan recovery baru, dan memulihkan seluruh data; master/key lama gagal; enable/rotate/disable berperilaku sesuai SEC-015–018. |
-| AT-SEC-08 | Vault dengan marker unik pada name, URL, username, password, tag, notes, history, dan custom fields; jalankan CRUD, backup, import invalid, export, dan lock | Pemindaian raw bytes/strings terhadap SQLite, semua `.lvbak`, config, log, crash report terkendali, dan temp directory tidak menemukan marker. CSV download client dikecualikan dan diverifikasi tidak pernah ada sebagai host temp file. |
+| AT-SEC-08 | Vault dengan marker unik pada name, URL, username, password, tag, notes, history, dan custom fields; jalankan CRUD, backup, import invalid, export, dan lock | Pemindaian raw bytes/strings terhadap PostgreSQL, semua `.lvbak`, config, log, crash report terkendali, dan temp directory tidak menemukan marker. CSV download client dikecualikan dan diverifikasi tidak pernah ada sebagai host temp file. |
 | AT-SEC-09 | Capture seluruh response API dan static headers | Semua API `no-store`; CSP/origin/Host rules aktif; CORS origin asing ditolak; token/query/body sensitif di-redact; tidak ada service worker/CDN/source map release. |
 | AT-SEC-10 | Lock sesi terakhir, lock-all, restore, reset, dan shutdown dengan instrumented secret buffers | Cache/domain state dan reference key dilepas serta mutable buffer di-zeroize best-effort; dokumentasi test tidak mengklaim eliminasi dari GC/swap. |
 
@@ -1009,7 +1009,7 @@ Fixture wajib disimpan di test suite dan tidak berisi credential nyata:
 | AT-BAK-01 | 25 mutasi pada satu hari dan proses aktif/startup melintasi 45 hari dengan fake clock | Backup ada setelah tiap mutasi sebelum response; tepat satu daily per hari aktif; retensi akhir adalah union 10 versi terbaru + satu daily per 30 tanggal UTC terbaru, tanpa menghapus file yang masuk kedua bucket. |
 | AT-BAK-02 | Restore backup masing-masing revision lama, manual, dan uploaded dengan DEK sesi aktif untuk vault yang sama atau key historis untuk kandidat lain | Checksum/AEAD/schema/reference tervalidasi; state tepat sama snapshot; session invalid/reload; unlock ulang berhasil; UI tidak meminta reautentikasi untuk DEK aktif dan memperingatkan kebutuhan key historis sebelum rotasi. |
 | AT-BAK-03 | Potong file, balik bit manifest/envelope, gunakan key salah, schema future, atau referensi entity invalid | Restore ditolak sebelum replace dan vault aktif byte-identik. |
-| AT-BAK-04 | Suntik disk-full/permission/I/O failure pada setiap write, flush, rename, index, dan SQLite commit | Sebelum commit menghasilkan revision lama dan error terarah; tidak ada response sukses tanpa backup wajib; orphan aman dibersihkan; tidak ada state campuran. |
+| AT-BAK-04 | Suntik disk-full/permission/I/O failure pada setiap write, flush, rename, index, dan PostgreSQL commit | Sebelum commit menghasilkan revision lama dan error terarah; tidak ada response sukses tanpa backup wajib; orphan aman dibersihkan; tidak ada state campuran. |
 | AT-BAK-05 | Kill proses pada setiap checkpoint mutation dan restore | Startup recovery memilih tepat state lengkap lama/baru dan integrity/AEAD check lulus, memenuhi QUA-015. |
 | AT-BAK-06 | Jalankan schema migration dari setiap versi yang didukung dan paksa gagal tiap langkah | Snapshot pre-migration dibuat; sukses menghasilkan schema/data golden; gagal rollback ke versi lama yang dapat dibuka. |
 | AT-BAK-07 | Ganti executable aplikasi dengan build baru sementara data folder tetap | Seluruh data, backup, config, dan recovery ability tetap utuh; aplikasi tidak menimpa data selain migrasi terkontrol. |

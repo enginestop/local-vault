@@ -13,11 +13,12 @@ TICKET_SECONDS = 10
 
 
 class Session:
-    def __init__(self, token: str, tab_instance_id: str, client_label: str) -> None:
+    def __init__(self, token: str, tab_instance_id: str, client_label: str, user_id: str | None = None) -> None:
         self.session_id = str(uuid.uuid4())
         self.token_digest = hashlib_sha256(token)
         self.tab_instance_id = tab_instance_id
         self.client_label = client_label
+        self.user_id = user_id
         self.created_at = now_utc()
         now = datetime.now(timezone.utc)
         self.last_active_at = now
@@ -47,7 +48,7 @@ class SessionManager:
         self._lock = threading.RLock()
 
     def create_session(
-        self, master_token: str, tab_instance_id: str, client_label: str
+        self, master_token: str, tab_instance_id: str, client_label: str, user_id: str | None = None
     ) -> Session:
         if not _is_uuid(tab_instance_id):
             raise errors.ValidationError("tab_instance_id must be a UUID")
@@ -59,7 +60,7 @@ class SessionManager:
                     "This tab instance already owns a session.",
                     409,
                 )
-            session = Session(master_token, tab_instance_id, client_label)
+            session = Session(master_token, tab_instance_id, client_label, user_id)
             self._sessions[session.session_id] = session
             self._tab_owners[tab_instance_id] = session.session_id
             return session

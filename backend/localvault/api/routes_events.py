@@ -22,6 +22,8 @@ async def events_ws(websocket: WebSocket):
         await websocket.close(code=4401)
         return
 
+    user_id = session.user_id
+
     queue: asyncio.Queue = asyncio.Queue(maxsize=100)
     try:
         ctx.sessions.set_ws_connected(session, queue)
@@ -32,15 +34,14 @@ async def events_ws(websocket: WebSocket):
         return
 
     await websocket.accept()
-    last_seen = ctx.vault.get_current_revision() if ctx.vault.is_unlocked() else 0
+    current_revision = await ctx.vault.get_current_revision(user_id) if user_id and ctx.vault.is_unlocked(user_id) else 0
+    last_seen = current_revision
 
     async def send_heartbeat():
         while True:
             await asyncio.sleep(20)
             ctx.sessions.touch(session)
-            await websocket.send_json(
-                {"type": "heartbeat", "occurred_at": now_utc()}
-            )
+            await websocket.send_json({"type": "heartbeat", "occurred_at": now_utc()})
 
     async def reader():
         nonlocal last_seen
@@ -53,37 +54,27 @@ async def events_ws(websocket: WebSocket):
                 continue
             if message.get("type") == "sync_state":
                 try:
-                    last_seen = int(
-                        message.get("last_seen_vault_revision", last_seen)
-                    )
+                    last_seen = int(message.get("last_seen_vault_revision", last_seen))
                 except (TypeError, ValueError):
                     continue
-                current = (
-                    ctx.vault.get_current_revision()
-                    if ctx.vault.is_unlocked()
-                    else 0
-                )
+                current = await ctx.vault.get_current_revision(user_id) if user_id and ctx.vault.is_unlocked(user_id) else 0
                 if current > last_seen:
-                    await websocket.send_json(
-                        {
-                            "event_id": str(uuid.uuid4()),
-                            "type": "vault.reload_required",
-                            "entity_type": None,
-                            "entity_id": None,
-                            "entity_revision": None,
-                            "vault_revision": current,
-                            "occurred_at": now_utc(),
-                        }
-                    )
+                    await websocket.send_json({
+                        "event_id": str(uuid.uuid4()),
+                        "type": "vault.reload_required",
+                        "entity_type": None,
+                        "entity_id": None,
+                        "entity_revision": None,
+                        "vault_revision": current,
+                        "occurred_at": now_utc(),
+                    })
 
     heartbeat_task = asyncio.create_task(send_heartbeat())
     reader_task = asyncio.create_task(reader())
     try:
         while True:
             queue_task = asyncio.create_task(queue.get())
-            done, _ = await asyncio.wait(
-                {queue_task, reader_task}, return_when=asyncio.FIRST_COMPLETED
-            )
+            done, _ = await asyncio.wait({queue_task, reader_task}, return_when=asyncio.FIRST_COMPLETED)
             if reader_task in done:
                 queue_task.cancel()
                 break

@@ -46,7 +46,7 @@ class PreviewUpdate(RequestModel):
 
 def _require_unlocked(ctx: AppContext, request: Request):
     session = require_session(request)
-    if not ctx.vault.is_unlocked():
+    if not ctx.vault.is_unlocked(session.user_id):
         raise errors.VaultLocked()
     return session
 
@@ -89,14 +89,14 @@ async def create_preview(
     preview = imp.ImportPreview(
         id=str(uuid.uuid4()),
         session_id=session.session_id,
-        base_vault_revision=ctx.vault.get_current_revision(),
+        base_vault_revision=await ctx.vault.get_current_revision(session.user_id),
         profile=resolved_profile,
         delimiter=selected_delimiter,
         mapping=resolved_mapping,
         source_columns=source_columns,
         source_rows=source_rows,
     )
-    _rebuild_preview(ctx.vault.plaintext, preview)
+    _rebuild_preview(ctx.vault.get_plaintext(session.user_id), preview)
     await ctx.imports.put(preview)
     return _preview_summary(preview)
 
@@ -118,7 +118,7 @@ async def update_preview(
     async with _owned(ctx, preview_id, session.session_id) as preview:
         if body.mapping is not None:
             preview.mapping = body.mapping
-            _rebuild_preview(ctx.vault.plaintext, preview)
+            _rebuild_preview(ctx.vault.get_plaintext(session.user_id), preview)
         by_row = {item.row_number: item.resolution for item in body.resolutions}
         for row in preview.valid_rows:
             if row["row_number"] in by_row:
@@ -156,7 +156,7 @@ async def commit_preview(request: Request, preview_id: str) -> dict:
     async with _owned(
         ctx, preview_id, session.session_id, remove_on_success=True
     ) as preview:
-        if preview.base_vault_revision != ctx.vault.get_current_revision():
+        if preview.base_vault_revision != await ctx.vault.get_current_revision(session.user_id):
             raise errors.ConflictError(
                 "PREVIEW_STALE", "Vault changed since preview; create a new preview"
             )
@@ -183,7 +183,7 @@ async def commit_preview(request: Request, preview_id: str) -> dict:
             return payload
 
         if any(row["resolution"] != "skip" for row in preview.valid_rows):
-            await ctx.vault.mutate(apply)
+            await ctx.vault.mutate(session.user_id, apply)
         return {"committed": len(committed_rows), "rows": committed_rows}
 
 

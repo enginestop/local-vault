@@ -1,8 +1,8 @@
 # LocalVault
 
-LocalVault adalah password manager portable untuk satu pemilik. Satu proses pada
-komputer host menyimpan vault terenkripsi dan menyajikan antarmuka web ke browser
-di komputer yang sama atau perangkat lain pada LAN.
+LocalVault adalah password manager untuk satu pemilik. Satu proses pada komputer
+host menyimpan vault terenkripsi di PostgreSQL dan menyajikan antarmuka web ke
+browser di komputer yang sama atau perangkat lain pada LAN.
 
 > **Status pengembangan:** source code dan pengujian lokal tersedia, tetapi build
 > v1 belum boleh dianggap sebagai release tervalidasi. Sejumlah gate SRS §15 masih
@@ -11,7 +11,7 @@ di komputer yang sama atau perangkat lain pada LAN.
 
 ## Fitur utama
 
-- vault satu pengguna dengan master password dan recovery key opsional;
+- akun pengguna dengan vault terenkripsi per pengguna, master password, dan recovery key opsional;
 - AES-256-GCM untuk payload vault dan Argon2id untuk penurunan kunci;
 - credential, kategori, tag, favorite, custom field Text/Secret, dan password
   history;
@@ -51,8 +51,8 @@ Detail lengkap tersedia di [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
 ## Menjalankan paket portable
 
 Target paket v1 adalah Windows 11 x64, macOS 14+ x64/arm64, dan Ubuntu 24.04
-x64. Pengguna paket portable tidak memerlukan Python, Node.js, package manager,
-atau database eksternal.
+x64. Pengguna paket portable tidak memerlukan Python, Node.js, atau package
+manager. PostgreSQL harus tersedia dan dapat diakses melalui `DATABASE_URL`.
 
 1. Ekstrak arsip release ke filesystem lokal yang writable.
 2. Jalankan `LocalVault.exe`, `LocalVault.app`, atau executable `LocalVault` untuk
@@ -71,9 +71,9 @@ dapat menjamin semantik tersebut tidak didukung.
 
 ### Data, backup, recovery, dan upgrade
 
-`LocalVault-Data` berisi konfigurasi, SQLite encrypted envelope, backup, log, dan
-instance lock. Jangan menghapus atau mengganti folder ini ketika memperbarui
-aplikasi.
+`LocalVault-Data` berisi konfigurasi, backup terenkripsi, log, dan instance lock.
+Envelope vault disimpan di PostgreSQL yang ditentukan oleh `DATABASE_URL`.
+Jangan menghapus atau mengganti folder ini ketika memperbarui aplikasi.
 
 - Simpan recovery key di tempat terpisah. Tanpa master password atau recovery
   key yang valid, vault tidak dapat dipulihkan.
@@ -93,6 +93,7 @@ Baseline yang digunakan CI:
 - Python 3.11;
 - Node.js 24.x. Vite yang dipin memerlukan minimal Node `20.19.0` atau
   `22.12.0+` pada major yang lebih baru.
+- PostgreSQL 16+ untuk menjalankan backend dari source.
 
 Dependency production, development, dan packaging dipisahkan di
 `backend/requirements-*.txt`. `backend/requirements.lock` mengunci dependency
@@ -107,6 +108,7 @@ py -3.11 -m venv .venv
 cd ..
 npm ci
 npm run build
+$env:DATABASE_URL = "postgresql://localvault:localvault@127.0.0.1:5432/localvault"
 cd backend
 .\.venv\Scripts\python.exe run.py
 ```
@@ -118,13 +120,16 @@ python3.11 -m venv backend/.venv
 backend/.venv/bin/python -m pip install --require-hashes -r backend/requirements.lock
 npm ci
 npm run build
+export DATABASE_URL="postgresql://localvault:localvault@127.0.0.1:5432/localvault"
 cd backend
 .venv/bin/python run.py
 ```
 
-`run.py` menjalankan `QApplication`/tray pada main thread dan Uvicorn pada worker
-thread. Dalam mode source, data dibuat di `backend/LocalVault-Data`. Direktori
-tersebut diabaikan Git; jangan gunakan data nyata sebagai fixture pengujian.
+`run.py` menjalankan server ASGI langsung. Launcher native menjalankan
+`QApplication`/tray pada main thread dan Uvicorn pada worker thread. Dalam mode
+source, konfigurasi, backup, dan log dibuat di `backend/LocalVault-Data`,
+sedangkan database PostgreSQL dibaca dari `DATABASE_URL`. Jangan gunakan data
+nyata sebagai fixture pengujian.
 
 Untuk hot reload frontend, biarkan launcher/backend berjalan, lalu dari root
 repository jalankan:
@@ -145,7 +150,8 @@ npm run test:e2e
 npm run audit
 ```
 
-Backend (jalankan dari direktori `backend` dengan virtual environment aktif):
+Backend (jalankan dari direktori `backend` dengan virtual environment aktif dan
+PostgreSQL tersedia):
 
 ```bash
 python -m pytest -q

@@ -3,21 +3,24 @@ import os
 import socket
 import uuid
 from contextlib import asynccontextmanager
-from urllib.parse import urlsplit
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .app_context import build_context, AppContext
+from .database.pool import create_pool, close_pool
 from . import errors
 from .logging_setup import make_logger
 from .api import (
     routes_status,
     routes_session,
+    routes_users,
     routes_credentials,
     routes_categories,
     routes_generator,
@@ -43,35 +46,45 @@ SECURITY_HEADERS = {
     "Cache-Control": "no-store",
 }
 
+PUBLIC_URL = os.environ.get("PUBLIC_URL", "").rstrip("/")
+TRUSTED_PROXIES = os.environ.get("TRUSTED_PROXIES", "127.0.0.1,::1")
+
 
 def create_app(data_dir: str, control=None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        ctx = build_context(data_dir, control=control)
+        await create_pool()
+        ctx = await build_context(data_dir)
         app.state.ctx = ctx
-        # scheduler: purge trash + daily not strictly needed here; run purge at startup
-        _purge_expired_trash(ctx)
-        maintenance = asyncio.create_task(_maintenance_loop(ctx))
+        app.state.control = control
         yield
-        maintenance.cancel()
+        await close_pool()
         try:
-            await maintenance
-        except asyncio.CancelledError:
-            pass
-        try:
-            ctx.conn.close()
+            ctx.sessions.lock_all()
         except Exception:
             pass
 
-    app = FastAPI(title="LocalVault", version="1.0.0", lifespan=lifespan)
+    app = FastAPI(title="LocalVault", version="2.0.0", lifespan=lifespan)
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[],  # SEC-024: no CORS
-        allow_methods=["*"],
-        allow_headers=["*"],
-        allow_credentials=False,
-    )
+    if PUBLIC_URL:
+        parsed = urlparse(PUBLIC_URL)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=[origin],
+            allow_methods=["*"],
+            allow_headers=["*"],
+            allow_credentials=True,
+        )
+    else:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=[],
+            allow_methods=["*"],
+            allow_headers=["*"],
+            allow_credentials=False,
+        )
+
     @app.middleware("http")
     async def security_middleware(request: Request, call_next):
         request.state.request_id = _request_id(request.headers.get("x-request-id"))
@@ -86,13 +99,16 @@ def create_app(data_dir: str, control=None) -> FastAPI:
                 return _secure(response, request.state.request_id)
             origin = request.headers.get("origin")
             if origin:
-                parsed = urlsplit(origin)
+                parsed = urlparse(origin)
                 if parsed.scheme != request.url.scheme or parsed.netloc.lower() != host.lower():
-                    response = errors.problem_response(
-                        request,
-                        errors.ProblemError("ORIGIN_NOT_ALLOWED", "Origin not allowed", "The request origin is not allowed.", 403),
-                    )
-                    return _secure(response, request.state.request_id)
+                    if PUBLIC_URL and parsed.geturl().rstrip("/") == PUBLIC_URL:
+                        pass
+                    else:
+                        response = errors.problem_response(
+                            request,
+                            errors.ProblemError("ORIGIN_NOT_ALLOWED", "Origin not allowed", "The request origin is not allowed.", 403),
+                        )
+                        return _secure(response, request.state.request_id)
             content_length = request.headers.get("content-length")
             request_limit = _request_limit(request.url.path)
             if content_length:
@@ -116,8 +132,6 @@ def create_app(data_dir: str, control=None) -> FastAPI:
                             errors.ProblemError("REQUEST_TOO_LARGE", "Request too large", "The request exceeds the allowed size.", 413),
                         )
                         return _secure(response, request.state.request_id)
-                # Starlette's wrapped receive replays a cached body to the
-                # downstream parser, including for chunked requests.
                 request._body = bytes(body)
         response = await call_next(request)
         return _secure(response, request.state.request_id)
@@ -148,7 +162,6 @@ def create_app(data_dir: str, control=None) -> FastAPI:
     @app.exception_handler(Exception)
     async def unhandled(request: Request, exc: Exception):
         rid = getattr(request.state, "request_id", str(uuid.uuid4()))
-        # SEC-028: do not log secret content; log sanitized
         logger.error("unhandled %s %s %s", request.method, request.url.path, type(exc).__name__, exc_info=True)
         return JSONResponse(
             status_code=500,
@@ -164,10 +177,10 @@ def create_app(data_dir: str, control=None) -> FastAPI:
             headers={"Cache-Control": "no-store", "X-Request-ID": rid},
         )
 
-    # routes
     v1 = "/api/v1"
     app.include_router(routes_status.router, prefix=v1)
     app.include_router(routes_session.router, prefix=v1)
+    app.include_router(routes_users.router, prefix=v1)
     app.include_router(routes_credentials.router, prefix=v1)
     app.include_router(routes_categories.router, prefix=v1)
     app.include_router(routes_generator.router, prefix=v1)
@@ -178,7 +191,6 @@ def create_app(data_dir: str, control=None) -> FastAPI:
     app.include_router(routes_trash.router, prefix=v1)
     app.include_router(routes_events.router)
 
-    # static SPA
     static_dir = os.path.join(os.path.dirname(__file__), "static")
     if os.path.isdir(static_dir):
         app.mount("/assets", StaticFiles(directory=os.path.join(static_dir, "assets"), html=False), name="assets")
@@ -204,8 +216,6 @@ def _request_id(candidate: str | None) -> str:
 
 
 def _request_limit(path: str) -> int:
-    if path in {"/api/v1/setup", "/api/v1/sessions/unlock", "/api/v1/sessions/recover"}:
-        return 1024 * 1024
     if path.startswith("/api/v1/imports/previews") or path == "/api/v1/backups/restore":
         return 52 * 1024 * 1024
     return 2 * 1024 * 1024
@@ -234,21 +244,9 @@ def _allowed_hosts() -> set[str]:
                 hosts.add(address.lower())
     except OSError:
         pass
+    if PUBLIC_URL:
+        parsed = urlparse(PUBLIC_URL)
+        pub_host = parsed.hostname
+        if pub_host:
+            hosts.add(pub_host.lower())
     return hosts
-
-
-async def _maintenance_loop(ctx: AppContext) -> None:
-    while True:
-        await asyncio.sleep(1)
-        removed = ctx.sessions.cleanup_expired()
-        await ctx.imports.cleanup(ctx.sessions.active_session_ids())
-        if removed and not ctx.sessions.has_sessions() and ctx.vault.is_unlocked():
-            ctx.vault.lock_all()
-
-
-def _purge_expired_trash(ctx: AppContext) -> None:
-    if not ctx.vault.setup_completed:
-        return
-    # We cannot decrypt without unlock; trash purge happens after unlock in app.
-    # This startup hook only runs when already unlocked is impossible; skip.
-    return

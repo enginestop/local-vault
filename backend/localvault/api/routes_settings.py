@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Request
-from fastapi import Form
 from pydantic import BaseModel, ConfigDict
 from typing import Literal, Optional
 
 from ..app_context import AppContext
 from .. import errors
-from ..api.deps import require_session
+from ..api.deps import get_user_id
 from ..domain.envelope import VaultEnvelope
 from ..domain.models import VaultSettings, nfkc_casefold
 from ..domain.password_policy import validate_master_password, PasswordPolicyError
@@ -13,6 +12,7 @@ from ..crypto.kdf import derive_kek, new_salt, verify_kek
 from ..crypto.aes import aes_gcm_encrypt, aes_gcm_decrypt
 from ..crypto.recovery import derive_recovery_kek, new_recovery_seed, encode_recovery_key, decode_recovery_seed
 from ..crypto.csprng import new_nonce
+from ..services.auth_service import set_master_password
 
 router = APIRouter()
 
@@ -21,15 +21,16 @@ class RequestModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-def _require_unlocked(ctx, request):
-    require_session(request)
-    if not ctx.vault.is_unlocked():
+def _require_unlocked(ctx, user_id):
+    if not ctx.vault.is_unlocked(user_id):
         raise errors.VaultLocked()
 
 
-def _current_env(ctx):
-    row = ctx.conn.execute("SELECT * FROM vault_envelope WHERE id = 1").fetchone()
-    return VaultEnvelope.from_row(dict(row))
+async def _current_env(ctx, user_id):
+    row = await ctx.vault._fetch_envelope(user_id)
+    if row is None:
+        raise errors.NotFoundError("vault envelope not found")
+    return VaultEnvelope.from_row(row)
 
 
 def _master_aad(env):
@@ -40,15 +41,12 @@ def _rec_aad(env):
     return ("LocalVault|recovery-wrap|1|" + env.vault_id + "|" + str(env.schema_version)).encode()
 
 
-def _payload_aad(env, rev):
-    return ("LocalVault|payload|1|" + env.vault_id + "|" + str(env.schema_version) + "|" + str(rev)).encode()
-
-
 @router.get("/settings/security")
 async def security_get(request: Request) -> dict:
     ctx: AppContext = request.app.state.ctx
-    _require_unlocked(ctx, request)
-    env = _current_env(ctx)
+    user_id = get_user_id(request)
+    _require_unlocked(ctx, user_id)
+    env = await _current_env(ctx, user_id)
     return {
         "kdf_algorithm": env.kdf_algorithm,
         "kdf_m_cost_kib": env.kdf_m_cost_kib,
@@ -68,30 +66,24 @@ class MasterPasswordChange(RequestModel):
 @router.put("/settings/security/master-password")
 async def change_master(request: Request, body: MasterPasswordChange) -> dict:
     ctx: AppContext = request.app.state.ctx
-    _require_unlocked(ctx, request)
+    user_id = get_user_id(request)
+    _require_unlocked(ctx, user_id)
     if body.new_master_password != body.confirm_new_master_password:
         raise errors.ValidationError("confirmation mismatch")
     try:
-        validate_master_password(
-            body.new_master_password,
-            body.confirm_new_master_password,
-            body.weak_password_acknowledged,
-        )
+        validate_master_password(body.new_master_password, body.confirm_new_master_password, body.weak_password_acknowledged)
     except PasswordPolicyError as exc:
         raise errors.ValidationError(str(exc)) from exc
-    env = _current_env(ctx)
-    # verify current
+    env = await _current_env(ctx, user_id)
     try:
         kek = derive_kek(body.current_master_password, env.kdf_salt)
         dek = aes_gcm_decrypt(kek, env.master_wrap_nonce, env.wrapped_dek_master, _master_aad(env))
     except Exception:
         raise errors.ReauthRequired()
-    # BAK-014: rewrap DEK with new KEK (new salt), payload unchanged
     new_salt_v = new_salt()
     new_kek = derive_kek(body.new_master_password, new_salt_v)
     master_nonce = new_nonce()
     wrapped = aes_gcm_encrypt(new_kek, master_nonce, dek, _master_aad(env))
-    # preserve recovery wrap
     new_env = VaultEnvelope(
         vault_id=env.vault_id, schema_version=env.schema_version, vault_revision=env.vault_revision,
         format_version=1, kdf_algorithm="argon2id", kdf_salt=new_salt_v,
@@ -101,40 +93,39 @@ async def change_master(request: Request, body: MasterPasswordChange) -> dict:
         payload_nonce=env.payload_nonce, payload_ciphertext=env.payload_ciphertext,
         envelope_checksum=_checksum(env.vault_id, env.vault_revision, env.payload_ciphertext, wrapped),
     )
-    with ctx.backups.transaction() as backup_tx:
-        backup_tx.write_backup(
-            env, kind="pre_operation", operation="master_password_change"
-        )
-        ctx.vault._write_envelope(backup_tx.tx, new_env)
+    await ctx.backups.write_backup(user_id, env, kind="pre_operation", operation="master_password_change")
+    await ctx.vault._write_envelope(user_id, new_env)
+    await set_master_password(user_id, body.new_master_password)
     return {"changed": True}
 
 
 class RecoveryKeyAction(RequestModel):
     action: Literal["enable", "rotate"]
-    master_password: Optional[str] = None
     current_master_password: Optional[str] = None
 
 
 @router.get("/settings/security/recovery-key")
 async def recovery_key_status(request: Request) -> dict:
     ctx: AppContext = request.app.state.ctx
-    require_session(request)
-    if not ctx.vault.is_unlocked():
+    user_id = get_user_id(request)
+    if not ctx.vault.is_unlocked(user_id):
         raise errors.VaultLocked()
-    env = _current_env(ctx)
+    env = await _current_env(ctx, user_id)
     return {"recovery_key_present": env.recovery_wrap_nonce is not None}
 
 
 @router.post("/settings/security/recovery-key")
 async def recovery_action(request: Request, body: RecoveryKeyAction) -> dict:
     ctx: AppContext = request.app.state.ctx
-    _require_unlocked(ctx, request)
-    env = _current_env(ctx)
-    # need DEK (unlocked) and current master to rewrap recovery
-    dek = ctx.vault._dek
+    user_id = get_user_id(request)
+    _require_unlocked(ctx, user_id)
+    env = await _current_env(ctx, user_id)
+    dek = ctx.vault.get_dek(user_id)
     if dek is None:
         raise errors.VaultLocked()
-    mp = body.current_master_password or body.master_password
+    mp = body.current_master_password
+    if mp is None:
+        raise errors.ValidationError("current_master_password is required")
     try:
         kek = derive_kek(mp, env.kdf_salt)
         aes_gcm_decrypt(kek, env.master_wrap_nonce, env.wrapped_dek_master, _master_aad(env))
@@ -158,11 +149,8 @@ async def recovery_action(request: Request, body: RecoveryKeyAction) -> dict:
         payload_nonce=env.payload_nonce, payload_ciphertext=env.payload_ciphertext,
         envelope_checksum=env.envelope_checksum,
     )
-    with ctx.backups.transaction() as backup_tx:
-        backup_tx.write_backup(
-            env, kind="pre_operation", operation="recovery_" + body.action
-        )
-        ctx.vault._write_envelope(backup_tx.tx, new_env)
+    await ctx.backups.write_backup(user_id, env, kind="pre_operation", operation="recovery_" + body.action)
+    await ctx.vault._write_envelope(user_id, new_env)
     return {"recovery_key": new_rec_key, "enabled": wrapped_rec is not None}
 
 
@@ -173,8 +161,9 @@ class RecoveryDisable(RequestModel):
 @router.delete("/settings/security/recovery-key", status_code=204)
 async def recovery_disable(request: Request, body: RecoveryDisable):
     ctx: AppContext = request.app.state.ctx
-    _require_unlocked(ctx, request)
-    env = _current_env(ctx)
+    user_id = get_user_id(request)
+    _require_unlocked(ctx, user_id)
+    env = await _current_env(ctx, user_id)
     try:
         kek = derive_kek(body.current_master_password, env.kdf_salt)
         aes_gcm_decrypt(kek, env.master_wrap_nonce, env.wrapped_dek_master, _master_aad(env))
@@ -189,11 +178,8 @@ async def recovery_disable(request: Request, body: RecoveryDisable):
         payload_nonce=env.payload_nonce, payload_ciphertext=env.payload_ciphertext,
         envelope_checksum=env.envelope_checksum,
     )
-    with ctx.backups.transaction() as backup_tx:
-        backup_tx.write_backup(
-            env, kind="pre_operation", operation="recovery_disable"
-        )
-        ctx.vault._write_envelope(backup_tx.tx, new_env)
+    await ctx.backups.write_backup(user_id, env, kind="pre_operation", operation="recovery_disable")
+    await ctx.vault._write_envelope(user_id, new_env)
     return None
 
 
@@ -209,26 +195,21 @@ class ResetVault(RequestModel):
 @router.post("/settings/security/reset-vault")
 async def reset_vault(request: Request, body: ResetVault) -> dict:
     ctx: AppContext = request.app.state.ctx
-    _require_unlocked(ctx, request)
+    user_id = get_user_id(request)
+    _require_unlocked(ctx, user_id)
     if body.confirm_recovery_phrase != "RESET LOCALVAULT":
         raise errors.ValidationError("confirmation phrase must be 'RESET LOCALVAULT'")
     try:
-        validate_master_password(
-            body.new_master_password,
-            body.confirm_new_master_password,
-            body.weak_password_acknowledged,
-        )
+        validate_master_password(body.new_master_password, body.confirm_new_master_password, body.weak_password_acknowledged)
     except PasswordPolicyError as exc:
         raise errors.ValidationError(str(exc)) from exc
-    env = _current_env(ctx)
+    env = await _current_env(ctx, user_id)
     try:
         kek = derive_kek(body.master_password, env.kdf_salt)
         aes_gcm_decrypt(kek, env.master_wrap_nonce, env.wrapped_dek_master, _master_aad(env))
     except Exception:
         raise errors.ReauthRequired()
-    # new vault id/dek, empty payload
     import uuid
-
     vault_id = str(uuid.uuid4())
     dek = __import__("localvault.crypto.csprng", fromlist=["random_bytes"]).random_bytes(32)
     salt = new_salt()
@@ -246,10 +227,7 @@ async def reset_vault(request: Request, body: ResetVault) -> dict:
         rec_key = encode_recovery_key(seed)
     from ..domain.models import VaultPayload
     from ..domain.canonical import canonical_json
-
-    canonical = canonical_json(
-        VaultPayload(settings=ctx.vault.plaintext.settings.model_copy(deep=True))
-    ).encode("utf-8")
+    canonical = canonical_json(VaultPayload(settings=ctx.vault.get_plaintext(user_id).settings.model_copy(deep=True))).encode("utf-8")
     payload_nonce = new_nonce()
     ciphertext = aes_gcm_encrypt(dek, payload_nonce, canonical, ("LocalVault|payload|1|" + vault_id + "|1|1").encode())
     new_env = VaultEnvelope(
@@ -260,22 +238,19 @@ async def reset_vault(request: Request, body: ResetVault) -> dict:
         payload_nonce=payload_nonce, payload_ciphertext=ciphertext,
         envelope_checksum=_checksum(vault_id, 1, ciphertext, wrapped),
     )
-    with ctx.backups.transaction() as backup_tx:
-        backup_tx.write_backup(env, kind="pre_operation", operation="reset_vault")
-        ctx.vault._write_envelope(backup_tx.tx, new_env)
+    await ctx.backups.write_backup(user_id, env, kind="pre_operation", operation="reset_vault")
+    await ctx.vault._write_envelope(user_id, new_env)
     ctx.sessions.lock_all()
     ctx.vault.lock_all()
     return {"reset": True, "recovery_key": rec_key}
 
 
-# ---------------- General ----------------
-
 @router.get("/settings/general")
 async def general_get(request: Request) -> dict:
     ctx: AppContext = request.app.state.ctx
-    _require_unlocked(ctx, request)
-    payload = ctx.vault.plaintext
-    return payload.settings.model_dump(mode="json")
+    user_id = get_user_id(request)
+    _require_unlocked(ctx, user_id)
+    return ctx.vault.get_plaintext(user_id).settings.model_dump(mode="json")
 
 
 class GeneralSettingsUpdate(RequestModel):
@@ -289,32 +264,25 @@ class GeneralSettingsUpdate(RequestModel):
 @router.put("/settings/general")
 async def general_put(request: Request, body: GeneralSettingsUpdate) -> dict:
     ctx: AppContext = request.app.state.ctx
-    _require_unlocked(ctx, request)
-    payload = ctx.vault.plaintext
+    user_id = get_user_id(request)
+    _require_unlocked(ctx, user_id)
+    payload = ctx.vault.get_plaintext(user_id)
     new_settings = VaultSettings(**{**payload.settings.model_dump(), **body.model_dump(exclude_none=True)})
-    # apply via mutate to bump revision
+
     def fn(p):
         p.settings = new_settings
         return p
 
-    await ctx.vault.mutate(fn)
-    # also persist language to config for lock screen
+    await ctx.vault.mutate(user_id, fn)
     ctx.config.language = new_settings.language
     ctx.config.save()
     return new_settings.model_dump(mode="json")
 
 
-# ---------------- Host ----------------
-
-class HostSettings(RequestModel):
-    port: Optional[int] = None
-    autostart: Optional[bool] = None
-
-
 @router.get("/settings/host")
 async def host_get(request: Request) -> dict:
     ctx: AppContext = request.app.state.ctx
-    require_session(request)
+    get_user_id(request)
     return {
         "port": ctx.config.port,
         "autostart": ctx.config.autostart,
@@ -324,10 +292,15 @@ async def host_get(request: Request) -> dict:
     }
 
 
+class HostSettings(RequestModel):
+    port: Optional[int] = None
+    autostart: Optional[bool] = None
+
+
 @router.put("/settings/host")
 async def host_put(request: Request, body: HostSettings) -> dict:
     ctx: AppContext = request.app.state.ctx
-    require_session(request)
+    get_user_id(request)
     restart_required = False
     if body.port is not None:
         if not (1024 <= body.port <= 65535):
@@ -336,11 +309,6 @@ async def host_put(request: Request, body: HostSettings) -> dict:
             ctx.config.port = body.port
             restart_required = True
     if body.autostart is not None:
-        if ctx.control is not None:
-            try:
-                ctx.control.request("set_autostart", {"enabled": body.autostart}, timeout=5)
-            except Exception as exc:
-                raise errors.ProblemError("AUTOSTART_FAILED", "Autostart failed", "The launcher could not update autostart.", 500) from exc
         ctx.config.autostart = body.autostart
     ctx.config.save()
     return {"port": ctx.config.port, "autostart": ctx.config.autostart, "restart_required": restart_required}
@@ -348,7 +316,6 @@ async def host_put(request: Request, body: HostSettings) -> dict:
 
 def _checksum(vault_id, rev, payload_ct, wrapped):
     import hashlib
-
     h = hashlib.sha256()
     h.update(vault_id.encode())
     h.update(rev.to_bytes(4, "big"))

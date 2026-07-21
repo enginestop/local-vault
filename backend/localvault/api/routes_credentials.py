@@ -4,7 +4,7 @@ from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from .. import errors
-from ..api.deps import require_session
+from ..api.deps import get_user_id, require_session
 from ..app_context import AppContext
 from ..domain.models import (
     Category,
@@ -23,9 +23,8 @@ class RequestModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-def _require_unlocked(ctx: AppContext, request: Request) -> None:
-    require_session(request)
-    if not ctx.vault.is_unlocked():
+def _require_unlocked(ctx: AppContext, user_id: str) -> None:
+    if not ctx.vault.is_unlocked(user_id):
         raise errors.VaultLocked()
 
 
@@ -97,18 +96,13 @@ def filter_credentials(
         needle = nfkc_casefold(q)
         items = [item for item in items if _matches_query(payload, item, needle)]
     if category:
-        items = [
-            item
-            for item in items
-            if _category_matches(payload, item.category_id, category)
-        ]
+        items = [item for item in items if _category_matches(payload, item.category_id, category)]
     wanted_tags = [nfkc_casefold(tag) for tag in (tags or []) if tag.strip()]
     if wanted_tags:
         def matches_tags(item: Credential) -> bool:
             owned = {nfkc_casefold(tag) for tag in item.tags}
             predicate = all if tag_mode == "and" else any
             return predicate(tag in owned for tag in wanted_tags)
-
         items = [item for item in items if matches_tags(item)]
     if favorite_only:
         items = [item for item in items if item.favorite]
@@ -136,19 +130,13 @@ async def list_credentials(
     page_size: int = Query(default=50, ge=1, le=100),
 ) -> dict:
     ctx: AppContext = request.app.state.ctx
-    _require_unlocked(ctx, request)
+    user_id = get_user_id(request)
+    _require_unlocked(ctx, user_id)
     items = filter_credentials(
-        ctx.vault.plaintext,
-        q=q,
-        category=category,
-        tags=tag,
-        favorite_only=favorite_only,
-        status=status,
-        has_url=has_url,
-        has_username=has_username,
-        tag_mode=tag_mode,
-        sort_field=sort_field,
-        sort_direction=sort_direction,
+        ctx.vault.get_plaintext(user_id),
+        q=q, category=category, tags=tag, favorite_only=favorite_only,
+        status=status, has_url=has_url, has_username=has_username,
+        tag_mode=tag_mode, sort_field=sort_field, sort_direction=sort_direction,
     )
     total = len(items)
     start = (page - 1) * page_size
@@ -157,14 +145,15 @@ async def list_credentials(
         "page": page,
         "page_size": page_size,
         "total": total,
-        "vault_revision": ctx.vault.get_current_revision(),
+        "vault_revision": await ctx.vault.get_current_revision(user_id),
     }
 
 
 @router.post("/credentials", status_code=201)
 async def create_credential(request: Request, body: CredentialCreate) -> dict:
     ctx: AppContext = request.app.state.ctx
-    _require_unlocked(ctx, request)
+    user_id = get_user_id(request)
+    _require_unlocked(ctx, user_id)
     new_credential = Credential.model_validate(body.model_dump())
 
     def apply(payload: VaultPayload) -> VaultPayload:
@@ -174,7 +163,7 @@ async def create_credential(request: Request, body: CredentialCreate) -> dict:
         return payload
 
     payload, _ = await ctx.vault.mutate(
-        apply,
+        user_id, apply,
         event_type="credential.created",
         entity_type="credential",
         entity_id=new_credential.id,
@@ -188,8 +177,9 @@ async def create_credential(request: Request, body: CredentialCreate) -> dict:
 @router.get("/credentials/{cred_id}")
 async def get_credential(request: Request, cred_id: str) -> dict:
     ctx: AppContext = request.app.state.ctx
-    _require_unlocked(ctx, request)
-    return serialize_credential(_find(ctx, cred_id))
+    user_id = get_user_id(request)
+    _require_unlocked(ctx, user_id)
+    return serialize_credential(_find(ctx, user_id, cred_id))
 
 
 @router.put("/credentials/{cred_id}")
@@ -197,8 +187,9 @@ async def update_credential(
     request: Request, cred_id: str, body: CredentialUpdate
 ) -> dict:
     ctx: AppContext = request.app.state.ctx
-    _require_unlocked(ctx, request)
-    current = _find(ctx, cred_id)
+    user_id = get_user_id(request)
+    _require_unlocked(ctx, user_id)
+    current = _find(ctx, user_id, cred_id)
     matched_revision = _parse_if_match(request)
     if matched_revision != body.base_revision:
         raise errors.ValidationError("base_revision must match If-Match")
@@ -214,34 +205,23 @@ async def update_credential(
         _validate_category(payload, changes["category_id"])
         if changes["password"] != old_password:
             history = list(target.password_history)
-            history.insert(
-                0,
-                PasswordHistoryEntry(
-                    password=old_password,
-                    changed_at=now_utc(),
-                ),
-            )
+            history.insert(0, PasswordHistoryEntry(password=old_password, changed_at=now_utc()))
             values["password_history"] = history[:5]
         values["updated_at"] = now_utc()
         values["revision"] = target.revision + 1
         replacement = Credential.model_validate(values)
-        payload.credentials = [
-            replacement if item.id == cred_id else item
-            for item in payload.credentials
-        ]
+        payload.credentials = [replacement if item.id == cred_id else item for item in payload.credentials]
         _merge_catalog_tags(payload, replacement.tags)
         return payload
 
     payload, _ = await ctx.vault.mutate(
-        apply,
+        user_id, apply,
         event_type="credential.updated",
         entity_type="credential",
         entity_id=cred_id,
         entity_revision=current.revision + 1,
     )
-    return serialize_credential(
-        next(item for item in payload.credentials if item.id == cred_id)
-    )
+    return serialize_credential(next(item for item in payload.credentials if item.id == cred_id))
 
 
 @router.post("/credentials/{cred_id}/trash")
@@ -256,8 +236,9 @@ async def restore_credential(request: Request, cred_id: str) -> dict:
 
 async def _set_trash_state(request: Request, cred_id: str, trashed: bool) -> dict:
     ctx: AppContext = request.app.state.ctx
-    _require_unlocked(ctx, request)
-    current = _find(ctx, cred_id)
+    user_id = get_user_id(request)
+    _require_unlocked(ctx, user_id)
+    current = _find(ctx, user_id, cred_id)
     _check_if_match(request, current.revision)
 
     def apply(payload: VaultPayload) -> VaultPayload:
@@ -268,7 +249,7 @@ async def _set_trash_state(request: Request, cred_id: str, trashed: bool) -> dic
         return payload
 
     await ctx.vault.mutate(
-        apply,
+        user_id, apply,
         pre_operation="trash" if trashed else None,
         event_type="credential.trashed" if trashed else "credential.restored",
         entity_type="credential",
@@ -281,12 +262,11 @@ async def _set_trash_state(request: Request, cred_id: str, trashed: bool) -> dic
 @router.delete("/credentials/{cred_id}", status_code=204)
 async def purge_credential(request: Request, cred_id: str):
     ctx: AppContext = request.app.state.ctx
-    _require_unlocked(ctx, request)
-    current = _find(ctx, cred_id)
+    user_id = get_user_id(request)
+    _require_unlocked(ctx, user_id)
+    current = _find(ctx, user_id, cred_id)
     if current.deleted_at is None:
-        raise errors.ProblemError(
-            "NOT_TRASHED", "Not trashed", "Only trashed items can be purged", 400
-        )
+        raise errors.ProblemError("NOT_TRASHED", "Not trashed", "Only trashed items can be purged", 400)
     _check_if_match(request, current.revision)
 
     def apply(payload: VaultPayload) -> VaultPayload:
@@ -294,7 +274,7 @@ async def purge_credential(request: Request, cred_id: str):
         return payload
 
     await ctx.vault.mutate(
-        apply,
+        user_id, apply,
         pre_operation="purge",
         event_type="credential.purged",
         entity_type="credential",
@@ -304,16 +284,7 @@ async def purge_credential(request: Request, cred_id: str):
     return None
 
 
-BulkAction = Literal[
-    "trash",
-    "restore",
-    "purge",
-    "set_favorite",
-    "unset_favorite",
-    "add_tags",
-    "remove_tags",
-    "set_category",
-]
+BulkAction = Literal["trash", "restore", "purge", "set_favorite", "unset_favorite", "add_tags", "remove_tags", "set_category"]
 
 
 class BulkTarget(RequestModel):
@@ -336,48 +307,28 @@ class BulkRequest(RequestModel):
 @router.post("/credentials/bulk")
 async def bulk_credentials(request: Request, body: BulkRequest) -> dict:
     ctx: AppContext = request.app.state.ctx
-    _require_unlocked(ctx, request)
-    by_id = {item.id: item for item in ctx.vault.plaintext.credentials}
+    user_id = get_user_id(request)
+    _require_unlocked(ctx, user_id)
+    by_id = {item.id: item for item in ctx.vault.get_plaintext(user_id).credentials}
     conflicts = []
     for target in body.ids:
         current = by_id.get(target.id)
         if current is None or current.revision != target.revision:
-            conflicts.append(
-                {
-                    "id": target.id,
-                    "current_revision": current.revision if current else None,
-                }
-            )
+            conflicts.append({"id": target.id, "current_revision": current.revision if current else None})
         elif body.action == "purge" and current.deleted_at is None:
             conflicts.append({"id": target.id, "reason": "NOT_TRASHED"})
     if conflicts:
-        raise errors.ProblemError(
-            "BULK_CONFLICT",
-            "Bulk operation conflict",
-            "One or more items are missing, stale, or invalid for this action.",
-            409,
-            conflicts,
-        )
+        raise errors.ProblemError("BULK_CONFLICT", "Bulk operation conflict", "One or more items are missing, stale, or invalid for this action.", 409, conflicts)
     if body.action == "set_category":
-        _validate_category(ctx.vault.plaintext, body.arguments.category_id)
+        _validate_category(ctx.vault.get_plaintext(user_id), body.arguments.category_id)
     target_ids = {item.id for item in body.ids}
-    changed_ids = {
-        item.id
-        for item in by_id.values()
-        if item.id in target_ids and _bulk_would_change(item, body)
-    }
+    changed_ids = {item.id for item in by_id.values() if item.id in target_ids and _bulk_would_change(item, body)}
     if not changed_ids:
-        return {
-            "applied": True,
-            "count": 0,
-            "vault_revision": ctx.vault.get_current_revision(),
-        }
+        return {"applied": True, "count": 0, "vault_revision": await ctx.vault.get_current_revision(user_id)}
 
     def apply(payload: VaultPayload) -> VaultPayload:
         if body.action == "purge":
-            payload.credentials = [
-                item for item in payload.credentials if item.id not in changed_ids
-            ]
+            payload.credentials = [item for item in payload.credentials if item.id not in changed_ids]
             return payload
         for target in payload.credentials:
             if target.id not in changed_ids:
@@ -390,16 +341,10 @@ async def bulk_credentials(request: Request, body: BulkRequest) -> dict:
                 target.favorite = body.action == "set_favorite"
             elif body.action == "add_tags":
                 existing = {nfkc_casefold(tag) for tag in target.tags}
-                target.tags.extend(
-                    tag
-                    for tag in body.arguments.tags
-                    if nfkc_casefold(tag) not in existing
-                )
+                target.tags.extend(tag for tag in body.arguments.tags if nfkc_casefold(tag) not in existing)
             elif body.action == "remove_tags":
                 removed = {nfkc_casefold(tag) for tag in body.arguments.tags}
-                target.tags = [
-                    tag for tag in target.tags if nfkc_casefold(tag) not in removed
-                ]
+                target.tags = [tag for tag in target.tags if nfkc_casefold(tag) not in removed]
             elif body.action == "set_category":
                 target.category_id = body.arguments.category_id
             target.updated_at = now_utc()
@@ -409,16 +354,10 @@ async def bulk_credentials(request: Request, body: BulkRequest) -> dict:
         return payload
 
     _, vault_revision = await ctx.vault.mutate(
-        apply,
-        pre_operation=f"bulk_{body.action}"
-        if body.action in ("trash", "purge")
-        else None,
+        user_id, apply,
+        pre_operation=f"bulk_{body.action}" if body.action in ("trash", "purge") else None,
     )
-    return {
-        "applied": True,
-        "count": len(changed_ids),
-        "vault_revision": vault_revision,
-    }
+    return {"applied": True, "count": len(changed_ids), "vault_revision": vault_revision}
 
 
 def _bulk_would_change(item: Credential, body: BulkRequest) -> bool:
@@ -446,18 +385,11 @@ def _bulk_would_change(item: Credential, body: BulkRequest) -> bool:
 def _matches_query(payload: VaultPayload, item: Credential, needle: str) -> bool:
     category_name = ""
     if item.category_id:
-        category = next(
-            (category for category in payload.categories if category.id == item.category_id),
-            None,
-        )
+        category = next((category for category in payload.categories if category.id == item.category_id), None)
         category_name = category.name if category else ""
     values = [
-        item.name,
-        item.username or "",
-        item.url or "",
-        item.notes,
-        category_name,
-        *item.tags,
+        item.name, item.username or "", item.url or "", item.notes,
+        category_name, *item.tags,
         *(field.label for field in item.custom_fields),
         *(field.value for field in item.custom_fields if field.type == "text"),
     ]
@@ -473,20 +405,11 @@ def _category_matches(payload: VaultPayload, category_id: Optional[str], value: 
     return False
 
 
-def _sort(
-    items: list[Credential],
-    field: str,
-    direction: str,
-    payload: VaultPayload,
-) -> list[Credential]:
+def _sort(items: list[Credential], field: str, direction: str, payload: VaultPayload) -> list[Credential]:
     reverse = direction == "desc"
-
     def category_name(item: Credential) -> str:
-        category = next(
-            (cat for cat in payload.categories if cat.id == item.category_id), None
-        )
-        return nfkc_casefold(category.name) if category else ""
-
+        cat = next((c for c in payload.categories if c.id == item.category_id), None)
+        return nfkc_casefold(cat.name) if cat else ""
     key_functions = {
         "name": lambda item: nfkc_casefold(item.name),
         "created_at": lambda item: item.created_at,
@@ -498,17 +421,15 @@ def _sort(
     return sorted(result, key=key_functions[field], reverse=reverse)
 
 
-def _find(ctx: AppContext, credential_id: str) -> Credential:
-    for credential in ctx.vault.plaintext.credentials:
+def _find(ctx: AppContext, user_id: str, credential_id: str) -> Credential:
+    for credential in ctx.vault.get_plaintext(user_id).credentials:
         if credential.id == credential_id:
             return credential
     raise errors.NotFoundError("credential not found")
 
 
 def _validate_category(payload: VaultPayload, category_id: Optional[str]) -> None:
-    if category_id is not None and not any(
-        category.id == category_id for category in payload.categories
-    ):
+    if category_id is not None and not any(category.id == category_id for category in payload.categories):
         raise errors.ValidationError("category_id does not exist")
 
 

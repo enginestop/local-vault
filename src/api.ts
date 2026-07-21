@@ -76,8 +76,19 @@ export interface BackupItem {
 export interface SessionResult {
   token: string
   session_id: string
-  vault_revision: number
+  user_id?: string
+  username?: string
+  email?: string
   recovery_key?: string | null
+}
+
+export interface UserProfile {
+  id: string
+  username: string
+  email: string
+  display_name: string
+  recovery_enabled: boolean
+  created_at: string
 }
 
 export interface ImportPreview {
@@ -102,6 +113,11 @@ export interface ExportResult {
 
 const TOKEN_KEY = 'lv_token'
 const TAB_KEY = 'lv_tab_id'
+
+let _currentUser: { username: string; email: string } | null = null
+
+export function getCurrentUser() { return _currentUser }
+export function setCurrentUser(user: { username: string; email: string } | null) { _currentUser = user }
 
 export function getToken(): string | null {
   return sessionStorage.getItem(TOKEN_KEY)
@@ -175,6 +191,7 @@ async function parseResponse(response: Response): Promise<any> {
 
 function notifySessionEnded(code: string): void {
   setToken(null)
+  _currentUser = null
   window.dispatchEvent(new CustomEvent('localvault:session-ended', { detail: { code } }))
 }
 
@@ -204,12 +221,7 @@ async function request<T>(
     const code = typeof problem.code === 'string' ? problem.code : `HTTP_${response.status}`
     const detail = safeMessage(problem.detail, safeMessage(data, response.statusText))
     if (code === 'SESSION_INVALID' || code === 'VAULT_LOCKED') notifySessionEnded(code)
-    throw new ApiError(
-      response.status,
-      code,
-      detail,
-      typeof problem.request_id === 'string' ? problem.request_id : undefined,
-    )
+    throw new ApiError(response.status, code, detail, typeof problem.request_id === 'string' ? problem.request_id : undefined)
   }
   return data as T
 }
@@ -255,23 +267,35 @@ async function downloadRequest(method: string, path: string, body?: unknown): Pr
 }
 
 export const api = {
-  status: () => request<{ setup_required: boolean; recovery_enabled: boolean; port: number; http_lan_warning: true; api_version: string }>('GET', '/api/v1/status'),
-  setup: (payload: Record<string, unknown>) => request<SessionResult>('POST', '/api/v1/setup', { body: { ...payload, tab_instance_id: getTabId() } }),
-  unlock: (master_password: string) => request<SessionResult>('POST', '/api/v1/sessions/unlock', { body: { master_password, tab_instance_id: getTabId() } }),
-  recover: (payload: Record<string, unknown>) => request<SessionResult>('POST', '/api/v1/sessions/recover', { body: { ...payload, tab_instance_id: getTabId() } }),
-  current: () => request<{ session_id: string; vault_revision: number; client_label: string }>('GET', '/api/v1/sessions/current'),
+  status: () => request<{ application_version: string; api_version: string; schema_version: number; port: number }>('GET', '/api/v1/status'),
+
+  register: (payload: Record<string, unknown>) => request<SessionResult>('POST', '/api/v1/register', { body: { ...payload, tab_instance_id: getTabId() } }),
+
+  login: (login: string, master_password: string) =>
+    request<SessionResult>('POST', '/api/v1/sessions/login', { body: { login, master_password, tab_instance_id: getTabId() } }),
+
+  logout: () => request<void>('POST', '/api/v1/sessions/logout'),
+
+  current: () => request<{ session_id: string; user_id: string; username: string; email: string; client_label: string }>('GET', '/api/v1/sessions/current'),
+
   lock: () => request<void>('POST', '/api/v1/sessions/lock'),
   lockAll: () => request<void>('POST', '/api/v1/sessions/lock-all'),
   eventTicket: () => request<{ ticket: string }>('POST', '/api/v1/sessions/event-ticket'),
 
-  listCredentials: (params: Record<string, string | number | boolean | string[]> = {}) => request<{ items: Credential[]; page: number; page_size: number; total: number; vault_revision: number }>('GET', `/api/v1/credentials?${appendQuery(params)}`),
+  getProfile: () => request<UserProfile>('GET', '/api/v1/users/me'),
+  updateProfile: (body: Record<string, unknown>) => request<UserProfile>('PUT', '/api/v1/users/me', { body }),
+
+  listCredentials: (params: Record<string, string | number | boolean | string[]> = {}) =>
+    request<{ items: Credential[]; page: number; page_size: number; total: number; vault_revision: number }>('GET', `/api/v1/credentials?${appendQuery(params)}`),
   getCredential: (id: string) => request<Credential>('GET', `/api/v1/credentials/${id}`),
   createCredential: (body: Record<string, unknown>) => request<Credential>('POST', '/api/v1/credentials', { body }),
-  updateCredential: (id: string, body: Pick<Credential, 'name' | 'url' | 'username' | 'password' | 'category_id' | 'tags' | 'favorite' | 'notes' | 'custom_fields'>, revision: number, overwrite = false) => request<Credential>('PUT', `/api/v1/credentials/${id}`, { body: { ...body, base_revision: revision, ...(overwrite ? { conflict_resolution: 'overwrite' } : {}) }, headers: { 'If-Match': `"${revision}"` } }),
+  updateCredential: (id: string, body: any, revision: number, overwrite = false) =>
+    request<Credential>('PUT', `/api/v1/credentials/${id}`, { body: { ...body, base_revision: revision, ...(overwrite ? { conflict_resolution: 'overwrite' } : {}) }, headers: { 'If-Match': `"${revision}"` } }),
   trashCredential: (id: string, revision: number) => request('POST', `/api/v1/credentials/${id}/trash`, { headers: { 'If-Match': `"${revision}"` } }),
   restoreCredential: (id: string, revision: number) => request('POST', `/api/v1/credentials/${id}/restore`, { headers: { 'If-Match': `"${revision}"` } }),
   purgeCredential: (id: string, revision: number) => request('DELETE', `/api/v1/credentials/${id}`, { headers: { 'If-Match': `"${revision}"` } }),
-  bulk: (action: string, credentials: Credential[], argumentsValue: Record<string, unknown> = {}) => request<{ applied: boolean; count: number; vault_revision: number }>('POST', '/api/v1/credentials/bulk', { body: { action, ids: credentials.map(({ id, revision }) => ({ id, revision })), arguments: argumentsValue } }),
+  bulk: (action: string, credentials: Credential[], argumentsValue: Record<string, unknown> = {}) =>
+    request<{ applied: boolean; count: number; vault_revision: number }>('POST', '/api/v1/credentials/bulk', { body: { action, ids: credentials.map(({ id, revision }) => ({ id, revision })), arguments: argumentsValue } }),
   emptyTrash: (count_expected: number) => request('POST', '/api/v1/trash/empty', { body: { confirmation: true, count_expected } }),
 
   categories: () => request<{ items: Category[]; vault_revision: number }>('GET', '/api/v1/categories'),
@@ -289,7 +313,8 @@ export const api = {
   updateGeneral: (body: Record<string, unknown>) => request<VaultSettings>('PUT', '/api/v1/settings/general', { body }),
   host: () => request<{ port: number; autostart: boolean; restart_required: boolean; lan_access_enabled: boolean; bind_host: string }>('GET', '/api/v1/settings/host'),
   updateHost: (body: { port?: number; autostart?: boolean }) => request<{ port: number; autostart: boolean; restart_required: boolean }>('PUT', '/api/v1/settings/host', { body }),
-  recoveryAction: (action: 'enable' | 'rotate', current_master_password: string) => request<{ recovery_key: string | null; enabled: boolean }>('POST', '/api/v1/settings/security/recovery-key', { body: { action, current_master_password } }),
+  recoveryAction: (action: 'enable' | 'rotate', current_master_password: string) =>
+    request<{ recovery_key: string | null; enabled: boolean }>('POST', '/api/v1/settings/security/recovery-key', { body: { action, current_master_password } }),
   disableRecovery: (current_master_password: string) => request<void>('DELETE', '/api/v1/settings/security/recovery-key', { body: { current_master_password } }),
   changeMaster: (body: Record<string, unknown>) => request('PUT', '/api/v1/settings/security/master-password', { body }),
   resetVault: (body: Record<string, unknown>) => request<{ reset: boolean; recovery_key?: string }>('POST', '/api/v1/settings/security/reset-vault', { body }),
@@ -315,7 +340,8 @@ export const api = {
     form.append('mapping', JSON.stringify(mapping))
     return request<ImportPreview>('POST', '/api/v1/imports/previews', { isForm: true, body: form })
   },
-  updateImport: (id: string, body: { mapping?: Record<string, unknown>; resolutions?: Array<{ row_number: number; resolution: string }> }) => request<ImportPreview>('PUT', `/api/v1/imports/previews/${id}`, { body }),
+  updateImport: (id: string, body: { mapping?: Record<string, unknown>; resolutions?: Array<{ row_number: number; resolution: string }> }) =>
+    request<ImportPreview>('PUT', `/api/v1/imports/previews/${id}`, { body }),
   commitImport: (id: string) => request<{ committed: number; rows: number[] }>('POST', `/api/v1/imports/previews/${id}/commit`),
   cancelImport: (id: string) => request('DELETE', `/api/v1/imports/previews/${id}`),
   downloadImportErrors: (id: string) => downloadRequest('GET', `/api/v1/imports/previews/${id}/errors.csv`),
