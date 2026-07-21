@@ -55,7 +55,7 @@ async def create_category(request: Request, body: CategoryBody) -> dict:
         payload.categories.append(new_category)
         return payload
 
-    payload, _ = await ctx.vault.mutate(apply)
+    payload, _ = await ctx.vault.mutate(apply, event_type="category.changed", entity_type="category", entity_id=new_category.id, entity_revision=1)
     return next(
         item.model_dump(mode="json")
         for item in payload.categories
@@ -89,7 +89,7 @@ async def rename_category(
         ]
         return payload
 
-    payload, _ = await ctx.vault.mutate(apply)
+    payload, _ = await ctx.vault.mutate(apply, event_type="category.changed", entity_type="category", entity_id=category_id, entity_revision=current.revision + 1)
     return next(
         item.model_dump(mode="json")
         for item in payload.categories
@@ -97,8 +97,8 @@ async def rename_category(
     )
 
 
-@router.delete("/categories/{category_id}")
-async def delete_category(request: Request, category_id: str) -> dict:
+@router.delete("/categories/{category_id}", status_code=204)
+async def delete_category(request: Request, category_id: str):
     ctx: AppContext = request.app.state.ctx
     _require_unlocked(ctx, request)
     current = _find_category(ctx.vault.plaintext, category_id)
@@ -115,8 +115,8 @@ async def delete_category(request: Request, category_id: str) -> dict:
                 credential.revision += 1
         return payload
 
-    await ctx.vault.mutate(apply, pre_operation="delete_category")
-    return {"deleted": True}
+    await ctx.vault.mutate(apply, pre_operation="delete_category", event_type="category.changed", entity_type="category", entity_id=category_id, entity_revision=current.revision)
+    return None
 
 
 @router.get("/tags")
@@ -148,7 +148,7 @@ async def create_tag(request: Request, body: TagBody) -> dict:
         payload.tags.append(name)
         return payload
 
-    await ctx.vault.mutate(apply)
+    await ctx.vault.mutate(apply, event_type="tag.changed", entity_type="tag")
     return {"name": name}
 
 
@@ -192,16 +192,16 @@ async def rename_tag(
                 credential.revision += 1
         return payload
 
-    _, revision = await ctx.vault.mutate(apply, pre_operation="rename_tag")
+    _, revision = await ctx.vault.mutate(apply, pre_operation="rename_tag", event_type="tag.changed", entity_type="tag")
     return {"renamed": True, "vault_revision": revision}
 
 
-@router.delete("/tags/{name}")
+@router.delete("/tags/{name}", status_code=204)
 async def delete_tag(
     request: Request,
     name: str,
     x_vault_revision: int | None = Header(default=None),
-) -> dict:
+):
     ctx: AppContext = request.app.state.ctx
     _require_unlocked(ctx, request)
     _check_vault_revision(ctx, x_vault_revision)
@@ -224,15 +224,16 @@ async def delete_tag(
                 credential.revision += 1
         return payload
 
-    _, revision = await ctx.vault.mutate(apply, pre_operation="delete_tag")
-    return {"deleted": True, "vault_revision": revision}
+    await ctx.vault.mutate(apply, pre_operation="delete_tag", event_type="tag.changed", entity_type="tag")
+    return None
 
 
 def _check_if_match(request: Request, current_revision: int) -> None:
     value = request.headers.get("if-match")
     if value is None:
         raise errors.PreconditionRequired()
-    if value.strip().strip('"') != str(current_revision):
+    expected = f'"{current_revision}"'
+    if value.strip() != expected:
         raise errors.RevisionConflict(current_revision)
 
 

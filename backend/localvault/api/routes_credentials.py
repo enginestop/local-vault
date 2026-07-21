@@ -29,11 +29,18 @@ def _require_unlocked(ctx: AppContext, request: Request) -> None:
         raise errors.VaultLocked()
 
 
-def _check_if_match(request: Request, current_rev: int) -> None:
+def _parse_if_match(request: Request) -> int:
     if_match = request.headers.get("if-match")
     if if_match is None:
         raise errors.PreconditionRequired()
-    if if_match.strip().strip('"') != str(current_rev):
+    value = if_match.strip()
+    if len(value) < 3 or not value.startswith('"') or not value.endswith('"') or not value[1:-1].isdigit():
+        raise errors.ValidationError('If-Match must be a quoted integer revision')
+    return int(value[1:-1])
+
+
+def _check_if_match(request: Request, current_rev: int) -> None:
+    if _parse_if_match(request) != current_rev:
         raise errors.RevisionConflict(current_rev)
 
 
@@ -50,16 +57,16 @@ class CredentialCreate(RequestModel):
 
 
 class CredentialUpdate(RequestModel):
-    name: Optional[str] = None
-    url: Optional[str] = None
-    username: Optional[str] = None
-    password: Optional[str] = None
-    category_id: Optional[str] = None
-    tags: Optional[list[str]] = None
-    favorite: Optional[bool] = None
-    notes: Optional[str] = None
-    custom_fields: Optional[list[CustomField]] = None
-    base_revision: Optional[int] = None
+    name: str
+    url: Optional[str]
+    username: Optional[str]
+    password: str
+    category_id: Optional[str]
+    tags: list[str]
+    favorite: bool
+    notes: str
+    custom_fields: list[CustomField]
+    base_revision: int = Field(ge=1)
     conflict_resolution: Optional[Literal["overwrite"]] = None
 
 
@@ -166,7 +173,13 @@ async def create_credential(request: Request, body: CredentialCreate) -> dict:
         _merge_catalog_tags(payload, new_credential.tags)
         return payload
 
-    payload, _ = await ctx.vault.mutate(apply)
+    payload, _ = await ctx.vault.mutate(
+        apply,
+        event_type="credential.created",
+        entity_type="credential",
+        entity_id=new_credential.id,
+        entity_revision=1,
+    )
     return serialize_credential(
         next(item for item in payload.credentials if item.id == new_credential.id)
     )
@@ -186,22 +199,20 @@ async def update_credential(
     ctx: AppContext = request.app.state.ctx
     _require_unlocked(ctx, request)
     current = _find(ctx, cred_id)
-    _check_if_match(request, current.revision)
-    changes = body.model_dump(
-        exclude_unset=True,
-        exclude={"base_revision", "conflict_resolution"},
-    )
+    matched_revision = _parse_if_match(request)
+    if matched_revision != body.base_revision:
+        raise errors.ValidationError("base_revision must match If-Match")
+    if current.revision != body.base_revision and body.conflict_resolution != "overwrite":
+        raise errors.EditConflict(current.revision, current.updated_at)
+    changes = body.model_dump(exclude={"base_revision", "conflict_resolution"})
 
     def apply(payload: VaultPayload) -> VaultPayload:
         target = next(item for item in payload.credentials if item.id == cred_id)
         values = target.model_dump(mode="python")
         old_password = target.password
         values.update(changes)
-        if values.get("name") is None:
-            raise errors.ValidationError("credential name must not be null")
-        if "category_id" in changes:
-            _validate_category(payload, changes["category_id"])
-        if "password" in changes and changes["password"] != old_password:
+        _validate_category(payload, changes["category_id"])
+        if changes["password"] != old_password:
             history = list(target.password_history)
             history.insert(
                 0,
@@ -221,7 +232,13 @@ async def update_credential(
         _merge_catalog_tags(payload, replacement.tags)
         return payload
 
-    payload, _ = await ctx.vault.mutate(apply)
+    payload, _ = await ctx.vault.mutate(
+        apply,
+        event_type="credential.updated",
+        entity_type="credential",
+        entity_id=cred_id,
+        entity_revision=current.revision + 1,
+    )
     return serialize_credential(
         next(item for item in payload.credentials if item.id == cred_id)
     )
@@ -250,12 +267,19 @@ async def _set_trash_state(request: Request, cred_id: str, trashed: bool) -> dic
         target.revision += 1
         return payload
 
-    await ctx.vault.mutate(apply, pre_operation="trash" if trashed else None)
+    await ctx.vault.mutate(
+        apply,
+        pre_operation="trash" if trashed else None,
+        event_type="credential.trashed" if trashed else "credential.restored",
+        entity_type="credential",
+        entity_id=cred_id,
+        entity_revision=current.revision + 1,
+    )
     return {"trashed" if trashed else "restored": True}
 
 
-@router.delete("/credentials/{cred_id}")
-async def purge_credential(request: Request, cred_id: str) -> dict:
+@router.delete("/credentials/{cred_id}", status_code=204)
+async def purge_credential(request: Request, cred_id: str):
     ctx: AppContext = request.app.state.ctx
     _require_unlocked(ctx, request)
     current = _find(ctx, cred_id)
@@ -269,8 +293,15 @@ async def purge_credential(request: Request, cred_id: str) -> dict:
         payload.credentials = [item for item in payload.credentials if item.id != cred_id]
         return payload
 
-    await ctx.vault.mutate(apply, pre_operation="purge")
-    return {"purged": True}
+    await ctx.vault.mutate(
+        apply,
+        pre_operation="purge",
+        event_type="credential.purged",
+        entity_type="credential",
+        entity_id=cred_id,
+        entity_revision=current.revision,
+    )
+    return None
 
 
 BulkAction = Literal[

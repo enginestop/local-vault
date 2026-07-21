@@ -10,8 +10,6 @@ from ..domain.models import now_utc
 
 GRACE_SECONDS = 10
 TICKET_SECONDS = 10
-INACTIVITY_SECONDS = 30 * 60
-ABSOLUTE_SECONDS = 12 * 60 * 60
 
 
 class Session:
@@ -23,8 +21,9 @@ class Session:
         self.created_at = now_utc()
         now = datetime.now(timezone.utc)
         self.last_active_at = now
-        self.absolute_expires_at = now + timedelta(seconds=ABSOLUTE_SECONDS)
         self.ws_connected = False
+        # The ten-second grace starts only after an established owner WebSocket
+        # disconnects; there is no idle or absolute timeout for a healthy owner.
         self.disconnect_deadline: Optional[datetime] = None
         self.owner_ws: Optional[asyncio.Queue] = None
 
@@ -69,7 +68,7 @@ class SessionManager:
         now = datetime.now(timezone.utc)
         with self._lock:
             for session in list(self._sessions.values()):
-                if self._expired(session, now):
+                if session.disconnect_deadline and now >= session.disconnect_deadline:
                     self._remove(session)
                     continue
                 if session.verify(token):
@@ -191,19 +190,10 @@ class SessionManager:
                 if now >= expires_at:
                     self._tickets.pop(ticket, None)
             for session in list(self._sessions.values()):
-                if self._expired(session, now) or (
-                    session.disconnect_deadline and now >= session.disconnect_deadline
-                ):
+                if session.disconnect_deadline and now >= session.disconnect_deadline:
                     self._remove(session)
                     removed += 1
         return removed
-
-    @staticmethod
-    def _expired(session: Session, now: datetime) -> bool:
-        return now >= session.absolute_expires_at or now >= (
-            session.last_active_at + timedelta(seconds=INACTIVITY_SECONDS)
-        )
-
 
 def _event(event_type: str) -> dict:
     return {

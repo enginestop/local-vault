@@ -1,5 +1,6 @@
 import asyncio
 import json
+import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -65,8 +66,12 @@ async def events_ws(websocket: WebSocket):
                 if current > last_seen:
                     await websocket.send_json(
                         {
+                            "event_id": str(uuid.uuid4()),
                             "type": "vault.reload_required",
-                            "current_revision": current,
+                            "entity_type": None,
+                            "entity_id": None,
+                            "entity_revision": None,
+                            "vault_revision": current,
                             "occurred_at": now_utc(),
                         }
                     )

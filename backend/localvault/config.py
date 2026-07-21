@@ -3,6 +3,11 @@ import os
 from typing import Optional
 
 CONFIG_FILE = "config.json"
+ALLOWED_KEYS = {"format_version", "port", "language", "autostart", "log_level", "instance_id"}
+
+
+class ConfigError(RuntimeError):
+    pass
 
 
 class Config:
@@ -25,18 +30,36 @@ class Config:
         try:
             with open(self.path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-        except Exception:
-            # Corrupt config: keep defaults but do not overwrite blindly
-            self._ensure_instance_id()
-            return
-        self.format_version = int(data.get("format_version", 1))
-        port = int(data.get("port", 8741))
-        if 1024 <= port <= 65535:
-            self.port = port
-        self.language = data.get("language", "id")
-        self.autostart = bool(data.get("autostart", False))
-        self.log_level = data.get("log_level", "INFO")
-        self.instance_id = data.get("instance_id", "")
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise ConfigError("config.json is unreadable or invalid JSON") from exc
+        if not isinstance(data, dict) or set(data) - ALLOWED_KEYS:
+            raise ConfigError("config.json contains unsupported fields")
+        if data.get("format_version", 1) != 1:
+            raise ConfigError("unsupported config format_version")
+        port = data.get("port", 8741)
+        if isinstance(port, bool) or not isinstance(port, int) or not 1024 <= port <= 65535:
+            raise ConfigError("config port must be an integer from 1024 to 65535")
+        language = data.get("language", "id")
+        if language not in {"id", "en"}:
+            raise ConfigError("config language must be id or en")
+        autostart = data.get("autostart", False)
+        if not isinstance(autostart, bool):
+            raise ConfigError("config autostart must be boolean")
+        log_level = data.get("log_level", "INFO")
+        if log_level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
+            raise ConfigError("unsupported config log_level")
+        instance_id = data.get("instance_id", "")
+        try:
+            if instance_id:
+                import uuid
+                instance_id = str(uuid.UUID(instance_id))
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise ConfigError("config instance_id must be a UUID") from exc
+        self.port = port
+        self.language = language
+        self.autostart = autostart
+        self.log_level = log_level
+        self.instance_id = instance_id
         self._ensure_instance_id()
         self._loaded = True
 

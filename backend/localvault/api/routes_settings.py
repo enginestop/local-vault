@@ -110,7 +110,7 @@ async def change_master(request: Request, body: MasterPasswordChange) -> dict:
 
 
 class RecoveryKeyAction(RequestModel):
-    action: Literal["enable", "rotate", "disable"]
+    action: Literal["enable", "rotate"]
     master_password: Optional[str] = None
     current_master_password: Optional[str] = None
 
@@ -166,11 +166,20 @@ async def recovery_action(request: Request, body: RecoveryKeyAction) -> dict:
     return {"recovery_key": new_rec_key, "enabled": wrapped_rec is not None}
 
 
-@router.delete("/settings/security/recovery-key")
-async def recovery_disable(request: Request) -> dict:
+class RecoveryDisable(RequestModel):
+    current_master_password: str
+
+
+@router.delete("/settings/security/recovery-key", status_code=204)
+async def recovery_disable(request: Request, body: RecoveryDisable):
     ctx: AppContext = request.app.state.ctx
     _require_unlocked(ctx, request)
     env = _current_env(ctx)
+    try:
+        kek = derive_kek(body.current_master_password, env.kdf_salt)
+        aes_gcm_decrypt(kek, env.master_wrap_nonce, env.wrapped_dek_master, _master_aad(env))
+    except Exception:
+        raise errors.ReauthRequired()
     new_env = VaultEnvelope(
         vault_id=env.vault_id, schema_version=env.schema_version, vault_revision=env.vault_revision,
         format_version=1, kdf_algorithm="argon2id", kdf_salt=env.kdf_salt,
@@ -185,7 +194,7 @@ async def recovery_disable(request: Request) -> dict:
             env, kind="pre_operation", operation="recovery_disable"
         )
         ctx.vault._write_envelope(backup_tx.tx, new_env)
-    return {"disabled": True}
+    return None
 
 
 class ResetVault(RequestModel):
@@ -269,12 +278,20 @@ async def general_get(request: Request) -> dict:
     return payload.settings.model_dump(mode="json")
 
 
+class GeneralSettingsUpdate(RequestModel):
+    language: Optional[Literal["id", "en"]] = None
+    tag_filter_mode: Optional[Literal["and", "or"]] = None
+    default_sort: Optional[dict] = None
+    page_size: Optional[Literal[25, 50, 100]] = None
+    warning_acknowledgements: Optional[list[str]] = None
+
+
 @router.put("/settings/general")
-async def general_put(request: Request, body: dict) -> dict:
+async def general_put(request: Request, body: GeneralSettingsUpdate) -> dict:
     ctx: AppContext = request.app.state.ctx
     _require_unlocked(ctx, request)
     payload = ctx.vault.plaintext
-    new_settings = VaultSettings(**{**payload.settings.model_dump(), **body})
+    new_settings = VaultSettings(**{**payload.settings.model_dump(), **body.model_dump(exclude_none=True)})
     # apply via mutate to bump revision
     def fn(p):
         p.settings = new_settings
@@ -319,6 +336,11 @@ async def host_put(request: Request, body: HostSettings) -> dict:
             ctx.config.port = body.port
             restart_required = True
     if body.autostart is not None:
+        if ctx.control is not None:
+            try:
+                ctx.control.request("set_autostart", {"enabled": body.autostart}, timeout=5)
+            except Exception as exc:
+                raise errors.ProblemError("AUTOSTART_FAILED", "Autostart failed", "The launcher could not update autostart.", 500) from exc
         ctx.config.autostart = body.autostart
     ctx.config.save()
     return {"port": ctx.config.port, "autostart": ctx.config.autostart, "restart_required": restart_required}

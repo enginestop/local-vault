@@ -313,7 +313,16 @@ class VaultService:
 
     # ---- mutation core ---------------------------------------------------
 
-    async def mutate(self, fn, pre_operation: str | None = None) -> tuple[VaultPayload, int]:
+    async def mutate(
+        self,
+        fn,
+        pre_operation: str | None = None,
+        *,
+        event_type: str = "vault.reload_required",
+        entity_type: str | None = None,
+        entity_id: str | None = None,
+        entity_revision: int | None = None,
+    ) -> tuple[VaultPayload, int]:
         """Apply a mutation atomically: clone -> N+1 -> encrypt -> backup -> commit -> broadcast.
 
         When ``pre_operation`` is given, a pre-operation backup of the CURRENT
@@ -357,10 +366,10 @@ class VaultService:
             self.sessions.broadcast(
                 {
                     "event_id": str(uuid.uuid4()),
-                    "type": "vault.changed",
-                    "entity_type": None,
-                    "entity_id": None,
-                    "entity_revision": None,
+                    "type": event_type,
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "entity_revision": entity_revision,
                     "vault_revision": new_revision,
                     "occurred_at": now_utc(),
                 }

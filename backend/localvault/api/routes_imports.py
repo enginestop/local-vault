@@ -187,8 +187,8 @@ async def commit_preview(request: Request, preview_id: str) -> dict:
         return {"committed": len(committed_rows), "rows": committed_rows}
 
 
-@router.delete("/imports/previews/{preview_id}")
-async def cancel_preview(request: Request, preview_id: str) -> dict:
+@router.delete("/imports/previews/{preview_id}", status_code=204)
+async def cancel_preview(request: Request, preview_id: str):
     ctx: AppContext = request.app.state.ctx
     session = _require_unlocked(ctx, request)
     try:
@@ -199,7 +199,7 @@ async def cancel_preview(request: Request, preview_id: str) -> dict:
         raise errors.ProblemError(
             "PREVIEW_FORBIDDEN", "Forbidden", "Preview belongs to another session", 403
         ) from exc
-    return {"cancelled": True}
+    return None
 
 
 @asynccontextmanager

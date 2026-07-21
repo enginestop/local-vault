@@ -403,6 +403,8 @@ const en: Record<keyof typeof id, string> = {
   confirmDisableRecovery: 'Disable the recovery key? You cannot recover the vault if the master password is lost.',
 }
 
+export const translations = { id, en } as const
+
 export function useI18n(lang: Lang) {
   const dict = lang === 'en' ? en : id
   const t = useCallback((key: keyof typeof id) => dict[key] ?? String(key), [dict])

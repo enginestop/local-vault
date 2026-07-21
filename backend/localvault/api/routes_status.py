@@ -10,13 +10,10 @@ router = APIRouter()
 
 
 class StatusResponse(BaseModel):
-    setup_completed: bool
-    locked: bool
     setup_required: bool
     application_version: str
     api_version: str
     schema_version: int
-    vault_revision: int
     recovery_enabled: bool
     port: int
     http_lan_warning: bool = True
@@ -32,13 +29,10 @@ async def status(request: Request) -> StatusResponse:
         ).fetchone()
         recovery_enabled = row is not None and row["recovery_wrap_nonce"] is not None
     return StatusResponse(
-        setup_completed=ctx.vault.setup_completed,
-        locked=not ctx.vault.is_unlocked(),
         setup_required=not ctx.vault.setup_completed,
         application_version="1.0.0",
         api_version="v1",
         schema_version=1,
-        vault_revision=ctx.vault.get_current_revision(),
         recovery_enabled=recovery_enabled,
         port=ctx.config.port,
     )

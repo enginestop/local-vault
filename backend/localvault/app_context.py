@@ -1,6 +1,7 @@
 import os
 import sqlite3
 from dataclasses import dataclass
+from typing import Any
 
 from .config import Config
 from .db import connect, init_schema
@@ -19,9 +20,10 @@ class AppContext:
     backups: BackupManager
     imports: ImportPreviewStore
     vault: VaultService
+    control: Any | None = None
 
 
-def build_context(data_dir: str) -> AppContext:
+def build_context(data_dir: str, control=None) -> AppContext:
     os.makedirs(data_dir, exist_ok=True)
     for sub in ("backups", "logs"):
         os.makedirs(os.path.join(data_dir, sub), exist_ok=True)
@@ -42,4 +44,5 @@ def build_context(data_dir: str) -> AppContext:
         backups=backups,
         imports=imports,
         vault=vault,
+        control=control,
     )

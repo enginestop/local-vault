@@ -197,8 +197,8 @@ export default function App() {
       try {
         const status = await api.status()
         if (cancelled) return
-        if (!status.setup_completed) { bootSettled.current = true; setScreen('signup'); return }
-        if (status.locked || !getToken()) { bootSettled.current = true; setToken(null); setScreen('login'); return }
+        if (status.setup_required) { bootSettled.current = true; setScreen('signup'); return }
+        if (!getToken()) { bootSettled.current = true; setToken(null); setScreen('login'); return }
         try { await api.current(); if (!cancelled) { bootSettled.current = true; await enterApp() } }
         catch { if (!cancelled) { bootSettled.current = true; setToken(null); setScreen('login') } }
       } catch { if (!cancelled) { bootSettled.current = true; setScreen('offline') } }
@@ -231,7 +231,7 @@ export default function App() {
           if (message.type === 'vault.locked' || message.code === 'TAB_OWNERSHIP_CONFLICT') {
             setToken(null)
             window.dispatchEvent(new CustomEvent('localvault:session-ended', { detail: { code: message.type } }))
-          } else if (message.type === 'vault.changed' || message.type === 'vault.reload_required') {
+          } else if (message.type === 'vault.reload_required' || (typeof message.type === 'string' && message.type !== 'heartbeat' && message.type !== 'error')) {
             if (reloadTimer.current !== null) clearTimeout(reloadTimer.current)
             reloadTimer.current = window.setTimeout(() => void loadAll().catch((error) => announce(errorText(error))), 80)
           }
@@ -412,7 +412,7 @@ function RowMenu({ item, edit, reload, announce, t }: { item: Credential; edit: 
     if ((kind === 'trash' || kind === 'purge') && !confirm(`${t('confirmAction')} ${item.name}?`)) return
     setPending(true)
     try {
-      if (kind === 'favorite') await api.updateCredential(item.id, { favorite: !item.favorite }, item.revision)
+      if (kind === 'favorite') await api.updateCredential(item.id, { ...item, favorite: !item.favorite }, item.revision)
       else if (kind === 'trash') await api.trashCredential(item.id, item.revision)
       else if (kind === 'restore') await api.restoreCredential(item.id, item.revision)
       else await api.purgeCredential(item.id, item.revision)
@@ -472,7 +472,7 @@ function CredentialDialog({ credential, startGenerator, categories, t, announce,
   useEffect(() => { if (generator) void generate() }, [generator, generate])
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault(); setBusy(true)
-    try { const body = { name, username: username || null, url: url || null, password, notes, tags: tagValue.split(',').map((tag) => tag.trim()).filter(Boolean), category_id: category || null }; if (credential) await api.updateCredential(credential.id, body, credential.revision); else await api.createCredential(body); await saved(); announce(t('saved')); close() } catch (error) { announce(errorText(error)) } finally { setBusy(false) }
+    try { const body = { name, username: username || null, url: url || null, password, notes, tags: tagValue.split(',').map((tag) => tag.trim()).filter(Boolean), category_id: category || null, favorite: credential?.favorite ?? false, custom_fields: credential?.custom_fields ?? [] }; if (credential) await api.updateCredential(credential.id, body, credential.revision); else await api.createCredential(body); await saved(); announce(t('saved')); close() } catch (error) { announce(errorText(error)) } finally { setBusy(false) }
   }
   return <NativeDialog title={generator ? t('generator') : credential ? t('edit') : t('newCredential')} close={close} busy={busy}>{generator ? <div className="generator-content"><div className="generated-box"><span>{generated || '—'}</span><IconButton label={t('copy')} onClick={() => void navigator.clipboard.writeText(generated)}><Clipboard size={17} /></IconButton></div><label className="range-label">{t('length')} {length}<input type="range" min="4" max="256" value={length} onChange={(event) => setLength(Number(event.target.value))} /></label><div className="charset-grid">{(['lower', 'upper', 'digits', 'symbols'] as const).map((key) => <label key={key}><input type="checkbox" checked={sets[key]} onChange={(event) => setSets({ ...sets, [key]: event.target.checked })} />{t(key)}</label>)}<label><input type="checkbox" checked={sets.ambiguous} onChange={(event) => setSets({ ...sets, ambiguous: event.target.checked })} />{t('excludeAmbiguous')}</label></div><div className="modal-actions"><button className="secondary" onClick={() => void generate()}>{t('regenerate')}</button><button className="primary" disabled={!generated} onClick={() => { setPassword(generated); setGenerator(false) }}>{t('usePassword')}</button></div></div> : <form className="modal-form" onSubmit={(event) => void submit(event)}><label>{t('name')}<input autoFocus required value={name} onChange={(event) => setName(event.target.value)} /></label><div className="form-row"><label>{t('username')}<input value={username} onChange={(event) => setUsername(event.target.value)} /></label><label>{t('category')}<select value={category} onChange={(event) => setCategory(event.target.value)}><option value="">—</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div><label>URL<input value={url} onChange={(event) => setUrl(event.target.value)} /></label><label>{t('password')}<div className="input-with-action"><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" onClick={() => setGenerator(true)}><Sparkles size={15} />{t('generateNew')}</button></div></label><label>{t('tags')}<input value={tagValue} onChange={(event) => setTagValue(event.target.value)} /></label><label>{t('notes')}<textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} /></label><div className="modal-actions"><button type="button" className="secondary" onClick={close}>{t('cancel')}</button><button className="primary" disabled={busy}>{t('save')}</button></div></form>}</NativeDialog>
 }
@@ -532,7 +532,7 @@ function SettingsView({ lang, settings, categories, tags, vaultRevision, t, anno
   useEffect(() => { if (settings) { setTagMode(settings.tag_filter_mode); setPageSize(settings.page_size); setDraftLang(settings.language) } }, [settings])
   async function saveGeneral(): Promise<void> { setBusy(true); try { await api.updateGeneral({ language: draftLang, tag_filter_mode: tagMode, page_size: pageSize }); setLang(draftLang); localStorage.setItem('lv_lang', draftLang); await reload(); announce(t('saved')) } catch (error) { announce(errorText(error)) } finally { setBusy(false) } }
   async function changeMaster(): Promise<void> { setBusy(true); try { await api.changeMaster({ current_master_password: current, new_master_password: next, confirm_new_master_password: confirmNext, weak_password_acknowledged: weakAck }); announce(t('masterChanged')); setCurrent(''); setNext(''); setConfirmNext('') } catch (error) { announce(errorText(error)) } finally { setBusy(false) } }
-  async function recoveryAction(action: 'enable' | 'rotate' | 'disable'): Promise<void> { if (action === 'disable' && !confirm(t('confirmDisableRecovery'))) return; setBusy(true); try { const result = await api.recoveryAction(action, current); if (result.recovery_key) showRecovery(result.recovery_key); await load() } catch (error) { announce(errorText(error)) } finally { setBusy(false) } }
+  async function recoveryAction(action: 'enable' | 'rotate' | 'disable'): Promise<void> { if (action === 'disable' && !confirm(t('confirmDisableRecovery'))) return; setBusy(true); try { if (action === 'disable') await api.disableRecovery(current); else { const result = await api.recoveryAction(action, current); if (result.recovery_key) showRecovery(result.recovery_key) } await load() } catch (error) { announce(errorText(error)) } finally { setBusy(false) } }
   async function reset(): Promise<void> { if (resetPhrase !== 'RESET LOCALVAULT' || !confirm(t('confirmReset'))) return; setBusy(true); try { const result = await api.resetVault({ master_password: current, confirm_recovery_phrase: resetPhrase, new_master_password: next, confirm_new_master_password: confirmNext, weak_password_acknowledged: weakAck, create_recovery_key: true }); if (result.recovery_key) showRecovery(result.recovery_key, () => { setToken(null); location.reload() }); else { setToken(null); location.reload() } } catch (error) { announce(errorText(error)) } finally { setBusy(false) } }
   async function saveHost(): Promise<void> { if (!host) return; setBusy(true); try { const result = await api.updateHost(host); announce(result.restart_required ? t('restartRequired') : t('saved')) } catch (error) { announce(errorText(error)) } finally { setBusy(false) } }
   async function createCategory(): Promise<void> { const name = prompt(t('createCategory')); if (!name) return; try { await api.createCategory(name); await reload() } catch (error) { announce(errorText(error)) } }

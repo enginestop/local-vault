@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response, status
 import uuid
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -55,7 +55,7 @@ class SessionResult(BaseModel):
     recovery_key: str | None = None
 
 
-@router.post("/setup")
+@router.post("/setup", status_code=status.HTTP_201_CREATED)
 async def setup(request: Request, body: SetupRequest) -> SessionResult:
     ctx: AppContext = request.app.state.ctx
     if not body.http_lan_risk_acknowledged:
@@ -136,23 +136,23 @@ async def current(request: Request) -> CurrentSessionResponse:
     )
 
 
-@router.post("/sessions/lock")
-async def lock(request: Request) -> dict:
+@router.post("/sessions/lock", status_code=status.HTTP_204_NO_CONTENT)
+async def lock(request: Request) -> Response:
     ctx: AppContext = request.app.state.ctx
     token = get_session(request)
     ctx.sessions.lock_session(token)
     if not ctx.sessions.has_sessions():
         ctx.vault.lock_all()
-    return {"locked": True}
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/sessions/lock-all")
-async def lock_all(request: Request) -> dict:
+@router.post("/sessions/lock-all", status_code=status.HTTP_204_NO_CONTENT)
+async def lock_all(request: Request) -> Response:
     ctx: AppContext = request.app.state.ctx
     require_session(request)
     ctx.sessions.lock_all()
     ctx.vault.lock_all()
-    return {"locked": True}
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/sessions/event-ticket")

@@ -17,15 +17,14 @@ __pycache__/
 # Python virtual env
 /backend/.venv
 
-# Tests
-/backend/tests/
-/backend/pytest.ini
-
 # Dev & agent artifacts
 /.agents
 /.playwright-mcp
 
-# Documentation
-/SRS.md
-/Bug_found_v1.md
-
+# Local test output (test source and configuration are tracked)
+/backend/.test-tmp*/
+/test-results/
+/playwright-report/
+/coverage/
+/.uv-cache/
+/.uv-tools/

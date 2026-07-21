@@ -73,6 +73,17 @@ class RevisionConflict(ProblemError):
         )
 
 
+class EditConflict(ProblemError):
+    def __init__(self, current_revision: int, updated_at: str) -> None:
+        super().__init__(
+            "EDIT_CONFLICT",
+            "Edit conflict",
+            "The credential was modified by another session.",
+            status_code=status.HTTP_409_CONFLICT,
+            errors=[{"current_revision": current_revision, "updated_at": updated_at}],
+        )
+
+
 class ValidationError(ProblemError):
     def __init__(self, detail: str, errors: Optional[list] = None) -> None:
         super().__init__(
@@ -134,5 +145,6 @@ def problem_response(request: Request, exc: ProblemError) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
         content=body,
+        media_type="application/problem+json",
         headers={"Cache-Control": "no-store", "X-Request-ID": rid},
     )

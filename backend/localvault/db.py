@@ -66,7 +66,37 @@ def init_schema(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    stored = get_meta(conn, "container_schema_version")
+    if stored is None:
+        set_meta(conn, "container_schema_version", str(SCHEMA_VERSION))
+    else:
+        try:
+            version = int(stored)
+        except ValueError as exc:
+            raise RuntimeError("invalid database schema version") from exc
+        if version > SCHEMA_VERSION:
+            raise RuntimeError("database schema is newer than this application")
+        migrate(conn, version, SCHEMA_VERSION)
+    integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+    if integrity != "ok":
+        raise RuntimeError(f"SQLite integrity check failed: {integrity}")
     conn.commit()
+
+
+MIGRATIONS = {1: lambda conn: None}
+
+
+def migrate(conn: sqlite3.Connection, source: int, target: int) -> None:
+    """Versioned migration registry; schema 1 is intentionally a no-op."""
+    current = source
+    while current < target:
+        next_version = current + 1
+        migration = MIGRATIONS.get(next_version)
+        if migration is None:
+            raise RuntimeError(f"no migration registered for schema {next_version}")
+        migration(conn)
+        set_meta(conn, "container_schema_version", str(next_version))
+        current = next_version
 
 
 def get_meta(conn: sqlite3.Connection, key: str) -> Optional[str]:

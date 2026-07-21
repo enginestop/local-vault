@@ -3,7 +3,7 @@ import unicodedata
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 MAX_NAME = 300
 MAX_NOTES = 100_000
@@ -48,7 +48,11 @@ def strength_of(pw: str) -> str:
     return "strong" if s >= 4 else "good" if s >= 2 else "weak"
 
 
-class CustomField(BaseModel):
+class DomainModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class CustomField(DomainModel):
     id: str = Field(default_factory=new_uuid)
     label: str = Field(min_length=1, max_length=MAX_FIELD_LABEL)
     type: Literal["text", "secret"]
@@ -63,13 +67,13 @@ class CustomField(BaseModel):
         return v
 
 
-class PasswordHistoryEntry(BaseModel):
+class PasswordHistoryEntry(DomainModel):
     id: str = Field(default_factory=new_uuid)
     password: str
     changed_at: str
 
 
-class Credential(BaseModel):
+class Credential(DomainModel):
     id: str = Field(default_factory=new_uuid)
     name: str
     url: Optional[str] = None
@@ -133,7 +137,7 @@ class Credential(BaseModel):
         return len(self.model_dump_json().encode("utf-8"))
 
 
-class Category(BaseModel):
+class Category(DomainModel):
     id: str = Field(default_factory=new_uuid)
     name: str
     created_at: str = Field(default_factory=now_utc)
@@ -149,7 +153,7 @@ class Category(BaseModel):
         return t
 
 
-class VaultSettings(BaseModel):
+class VaultSettings(DomainModel):
     language: Literal["id", "en"] = "id"
     tag_filter_mode: Literal["and", "or"] = "and"
     default_sort: dict = Field(default_factory=lambda: {"field": "name", "direction": "asc"})
@@ -157,14 +161,14 @@ class VaultSettings(BaseModel):
     warning_acknowledgements: list[str] = Field(default_factory=list)
 
 
-class VaultPayload(BaseModel):
+class VaultPayload(DomainModel):
     credentials: list[Credential] = Field(default_factory=list)
     categories: list[Category] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     settings: VaultSettings = Field(default_factory=VaultSettings)
 
 
-class TagRenameRequest(BaseModel):
+class TagRenameRequest(DomainModel):
     source: str
     target: str
 
