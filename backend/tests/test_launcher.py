@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import threading
 
 import pytest
@@ -8,6 +9,8 @@ from localvault.config import Config, ConfigError
 from localvault.launcher.autostart import AutostartManager
 from localvault.launcher.control import ControlBridge
 from localvault.launcher.main import filesystem_probe
+from localvault.launcher.server import ServerWorker
+from localvault.logging_setup import configure_file_logging
 
 
 def test_control_bridge_is_thread_safe():
@@ -44,3 +47,12 @@ def test_config_corruption_is_fatal_and_not_overwritten(tmp_path):
 def test_filesystem_probe_leaves_no_plaintext_probe(tmp_path):
     filesystem_probe(str(tmp_path))
     assert sorted(item.name for item in tmp_path.iterdir()) == ["backups", "logs"]
+
+
+def test_windowed_server_does_not_require_console_streams(tmp_path, monkeypatch):
+    configure_file_logging(str(tmp_path), "INFO")
+    monkeypatch.setattr(sys, "stdout", None)
+    monkeypatch.setattr(sys, "stderr", None)
+    worker = ServerWorker(str(tmp_path), 8741, "INFO", ControlBridge(), sys.executable)
+    assert worker.server.config.log_config is None
+    assert (tmp_path / "logs" / "localvault.log").is_file()

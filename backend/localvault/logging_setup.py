@@ -1,5 +1,8 @@
 import logging
+import os
 import re
+import time
+from logging.handlers import RotatingFileHandler
 
 # Patterns that must never appear in logs (SEC-028)
 _REDACT_PATTERNS = [
@@ -11,6 +14,10 @@ _REDACT_PATTERNS = [
 ]
 
 REDACTED = b"<REDACTED>"
+
+
+class UtcFormatter(logging.Formatter):
+    converter = time.gmtime
 
 
 def redact_bytes(data: bytes) -> bytes:
@@ -43,6 +50,29 @@ def make_logger(name: str, level: str = "INFO") -> logging.Logger:
     logger.propagate = False
     if not logger.handlers:
         handler = logging.StreamHandler()
-        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+        handler.setFormatter(UtcFormatter("%(asctime)sZ %(levelname)s %(name)s %(message)s"))
         logger.addHandler(handler)
     return logger
+
+
+def configure_file_logging(data_dir: str, level: str = "INFO") -> str:
+    """Route application logs to a rotating UTF-8 file for windowed builds."""
+    log_dir = os.path.join(data_dir, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    path = os.path.join(log_dir, "localvault.log")
+    handler = RotatingFileHandler(
+        path,
+        maxBytes=2 * 1024 * 1024,
+        backupCount=5,
+        encoding="utf-8",
+    )
+    handler.setFormatter(UtcFormatter("%(asctime)sZ %(levelname)s %(name)s %(message)s"))
+    handler.addFilter(RedactingFilter())
+    resolved_level = getattr(logging, level.upper(), logging.INFO)
+    for name in ("localvault.api", "localvault.launcher"):
+        logger = logging.getLogger(name)
+        logger.setLevel(resolved_level)
+        logger.handlers.clear()
+        logger.addHandler(handler)
+        logger.propagate = False
+    return path

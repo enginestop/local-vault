@@ -171,6 +171,11 @@ PyInstaller tidak mendukung satu build lintas platform sebagai bukti
 kompatibilitas. Jalankan build pada masing-masing OS target setelah dependency
 dari lockfile terpasang.
 
+Sebelum build, hentikan `npm run dev`/Vite dan instance LocalVault dari source.
+`npm ci` harus dapat mengganti `node_modules` tanpa file yang masih dikunci.
+Script Windows menggunakan executable packaging dari `backend/.venv` secara
+langsung dan akan berhenti pada tahap pertama yang gagal.
+
 Windows PowerShell:
 
 ```powershell
@@ -185,6 +190,9 @@ macOS/Linux:
 
 Script membangun frontend lebih dahulu, membundel launcher/backend/aset dengan
 PyInstaller, membuat arsip portable, SBOM Python CycloneDX, dan `SHA256SUMS`.
+Output Windows berada di `release/LocalVault-windows-x64.zip`; ekstrak seluruh
+isi ZIP sebelum menjalankan `LocalVault.exe`—jangan menjalankan executable
+langsung dari dalam ZIP atau memisahkannya dari folder `_internal`.
 Artefak baru boleh dipublikasikan setelah release matrix, security audit, dan
 seluruh gate SRS yang berlaku lulus terhadap byte artefak yang sama.
 

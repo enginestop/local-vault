@@ -7,8 +7,11 @@ from typing import Any
 import uvicorn
 
 from ..main import create_app
+from ..logging_setup import make_logger
 from .autostart import AutostartManager
 from .control import ControlBridge
+
+logger = make_logger("localvault.launcher")
 
 
 class ServerWorker(threading.Thread):
@@ -18,7 +21,20 @@ class ServerWorker(threading.Thread):
         self.bridge = bridge
         self.status: queue.Queue[tuple[str, str | None]] = queue.Queue()
         self.app = create_app(data_dir, control=bridge)
-        self.server = uvicorn.Server(uvicorn.Config(self.app, host="0.0.0.0", port=port, log_level=log_level.lower(), access_log=False))
+        # A PyInstaller windowed executable has no sys.stdout/sys.stderr.
+        # Uvicorn's default console log configuration assumes both exist and
+        # fails before binding the socket, so launcher logging is configured
+        # separately to LocalVault-Data/logs/localvault.log.
+        self.server = uvicorn.Server(
+            uvicorn.Config(
+                self.app,
+                host="0.0.0.0",
+                port=port,
+                log_level=log_level.lower(),
+                access_log=False,
+                log_config=None,
+            )
+        )
         self.autostart = AutostartManager(executable)
         self._control_thread: threading.Thread | None = None
 
@@ -26,10 +42,13 @@ class ServerWorker(threading.Thread):
         self._control_thread = threading.Thread(target=self._control_loop, name="localvault-control", daemon=True)
         self._control_thread.start()
         self.status.put(("starting", None))
+        logger.info("server worker starting on port %s", self.server.config.port)
         try:
             self.server.run()
+            logger.info("server worker stopped")
             self.status.put(("stopped", None))
         except BaseException as exc:
+            logger.exception("server worker failed: %s", type(exc).__name__)
             self.status.put(("error", str(exc)))
 
     def _control_loop(self) -> None:

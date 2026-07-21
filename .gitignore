@@ -4,6 +4,10 @@
 # Build output
 /dist
 /dist_old
+/build/
+/backend/build/
+/backend/dist/
+/release/
 /backend/localvault/static/
 
 # Runtime data

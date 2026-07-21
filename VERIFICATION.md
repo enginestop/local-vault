@@ -11,6 +11,7 @@ Tanggal: 21 Juli 2026 (Asia/Jakarta)
 - Dependency Python: `pip-audit -r backend/requirements.lock` melaporkan tidak ada vulnerability yang diketahui.
 - Launcher: control bridge, config fatal, filesystem probe, dan XDG autostart memiliki unit test lintas-platform yang tidak mengubah entry pengguna.
 - Compatibility pin: 9 test kontrak/launcher juga lulus pada environment terisolasi dengan `pytest==9.0.3`, `pytest-asyncio==1.3.0`, `pytest-qt==4.5.0`, dan `PySide6==6.11.1`.
+- Artefak Windows windowed: ZIP `LocalVault-windows-x64.zip` dengan SHA-256 `d32f6b9ddd25c0662085088cd55af7ceceb5775473775e133e037757637c4882` diekstrak ke direktori bersih; proses tetap hidup, `GET /api/v1/status` dan UI merespons `200`, aset SPA tersedia, serta log berotasi dibuat di `LocalVault-Data/logs`.
 
 ## Status audit lama
 

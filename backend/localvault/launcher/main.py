@@ -8,6 +8,7 @@ import webbrowser
 from pathlib import Path
 
 from ..config import Config, ConfigError
+from ..logging_setup import configure_file_logging
 from .control import ControlBridge
 from .server import ServerWorker
 
@@ -93,6 +94,7 @@ def run() -> int:
         filesystem_probe(data_dir)
         config = Config(data_dir)
         config.load()
+        configure_file_logging(data_dir, config.log_level)
     except (OSError, ConfigError) as exc:
         QMessageBox.critical(None, "LocalVault", f"Startup gagal / failed:\n{exc}")
         os.close(lock)
