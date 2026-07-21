@@ -380,6 +380,7 @@ function AuthScreen({ screen, lang, setLang, t, onSuccess, onScreen, retry }: { 
   const [createRecovery, setCreateRecovery] = useState(true)
   const [riskAck, setRiskAck] = useState(false)
   const [weakAck, setWeakAck] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   if (screen === 'boot') return <div className="auth-page loading-state"><RefreshCw className="spin" /><p>{t('loading')}</p></div>
@@ -396,13 +397,121 @@ function AuthScreen({ screen, lang, setLang, t, onSuccess, onScreen, retry }: { 
     } catch (reason) { setError(errorText(reason)) }
     finally { setBusy(false) }
   }
-  return <div className="auth-page"><div className="http-banner auth-banner"><ShieldAlert size={16} /><strong>{t('httpBanner')}</strong></div><header className="auth-header"><div className="brand auth-brand"><span className="brand-mark"><LockKeyhole size={20} /></span>{t('appName')}</div><div className="auth-connection"><Wifi size={16} />{t('lanActive')}</div></header><main className="auth-layout"><section className="auth-intro"><p className="auth-kicker">{t('privateNoCloud')}</p><h1>{isRecover ? t('recover') : isLogin ? t('loginTitle') : t('signupTitle')}</h1></section><section className="auth-card"><form className="auth-form" onSubmit={(event) => void submit(event)}>
-    {isRecover && <label><span>{t('recoveryKey')}</span><div className="auth-input"><KeyRound size={18} /><input required value={recovery} onChange={(event) => setRecovery(event.target.value)} /></div></label>}
-    <label><span>{isRecover ? t('newMaster') : t('masterPassword')}</span><div className="auth-input"><LockKeyhole size={18} /><input type="password" required value={master} onChange={(event) => setMaster(event.target.value)} /></div></label>
-    {!isLogin && <><label><span>{t('confirmMaster')}</span><div className="auth-input"><ShieldCheck size={18} /><input type="password" required value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></div></label><div className="strength-row"><span>{t('passwordStrength')}</span><strong>{t(strength)}</strong></div>{strength === 'weak' && <label className="auth-check"><input type="checkbox" checked={weakAck} onChange={(event) => setWeakAck(event.target.checked)} /><span>{t('weakPasswordAck')}</span></label>}</>}
-    {screen === 'signup' && <><label className="auth-check"><input type="checkbox" checked={createRecovery} onChange={(event) => setCreateRecovery(event.target.checked)} /><span>{t('createRecovery')}</span></label><label className="auth-check"><input type="checkbox" required checked={riskAck} onChange={(event) => setRiskAck(event.target.checked)} /><span>{t('understandRisk')}</span></label><label className="auth-select"><span>{t('language')}</span><select value={lang} onChange={(event) => setLang(event.target.value as Lang)}><option value="id">Bahasa Indonesia</option><option value="en">English</option></select></label></>}
-    {error && <p className="form-error">{error}</p>}<button className="primary auth-submit" disabled={busy || (!isLogin && strength === 'weak' && !weakAck)}>{busy ? t('working') : isLogin ? t('openVault') : isRecover ? t('recover') : t('createOpen')}</button>
-  </form>{isLogin && <button className="link-button" onClick={() => onScreen('recover')}>{t('useRecovery')}</button>}{isRecover && <button className="link-button" onClick={() => onScreen('login')}>{t('switchToLogin')}</button>}<div className="auth-switch"><button type="button" onClick={retry}>{t('retry')}</button></div></section></main></div>
+  return <div className="auth-page">
+    <div className="http-banner auth-banner">
+      <ShieldAlert size={16} />
+      <span>{t('httpBannerShort')}</span>
+      <a href="#risk" onClick={(e) => { e.preventDefault(); alert(t('threatModel')) }}>{t('learnRiskLink')}</a>
+    </div>
+    <header className="auth-header">
+      <div className="brand auth-brand">
+        <span className="brand-mark"><LockKeyhole size={20} /></span>
+        <span className="brand-name">{t('appName')}</span>
+      </div>
+      <div className="auth-connection">
+        <Wifi size={16} />
+        <span>{t('hostLocalActive')}</span>
+        <strong>192.168.1.24:8080</strong>
+      </div>
+    </header>
+    <main className="auth-layout">
+      <section className="auth-intro">
+        <p className="auth-kicker">VAULT PRIBADI · TANPA CLOUD</p>
+        <h1>{isLogin ? t('welcomeBack') : isRecover ? t('recover') : t('appName')}</h1>
+        <p className="auth-lead">{t('openEncryptedVault')}</p>
+        <div className="auth-vault-visual">
+          <span className="auth-vault-ring"><LockKeyhole size={24} /></span>
+          <div>
+            <strong>{t('aesGcm')}</strong>
+            <span>{t('dataEncryptedAtRest')}</span>
+          </div>
+        </div>
+        <div className="auth-points">
+          <div><span><HardDrive size={18} /></span><p><strong>{t('savedLocally')}</strong><small>{t('savedLocallySub')}</small></p></div>
+          <div><span><ShieldCheck size={18} /></span><p><strong>{t('singleMasterPassword')}</strong><small>{t('singleMasterPasswordSub')}</small></p></div>
+          <div><span><KeyRound size={18} /></span><p><strong>{t('optionalRecovery')}</strong><small>{t('optionalRecoverySub')}</small></p></div>
+        </div>
+      </section>
+      <section className="auth-card">
+        <div className="auth-card-heading">
+          <span className="auth-mode-badge">{isRecover ? 'RECOVERY' : isLogin ? t('loginBadge') : 'DAFTAR'}</span>
+          <h2>{isRecover ? t('recover') : isLogin ? t('loginTitle') : t('signupTitle')}</h2>
+          {isLogin && <p>{t('loginSubtitle')}</p>}
+        </div>
+        {isLogin && (
+          <div className="auth-vault-status">
+            <span><ArchiveRestore size={18} /></span>
+            <div>
+              <strong>{t('vaultFound')}</strong>
+              <small>{t('vaultRevisionInfo')}</small>
+            </div>
+            <Check size={16} className="status-check" />
+          </div>
+        )}
+        <form className="auth-form" onSubmit={(event) => void submit(event)}>
+          {isRecover && <label><span>{t('recoveryKey')}</span><div className="auth-input"><KeyRound size={18} /><input required value={recovery} onChange={(event) => setRecovery(event.target.value)} /></div></label>}
+          <label>
+            <span>{isRecover ? t('newMaster') : t('masterPassword')}</span>
+            <div className="auth-input">
+              <LockKeyhole size={18} />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                placeholder={isLogin ? t('enterMasterPasswordPlaceholder') : ''}
+                value={master}
+                onChange={(event) => setMaster(event.target.value)}
+              />
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label="Toggle password"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </label>
+          {!isLogin && <><label><span>{t('confirmMaster')}</span><div className="auth-input"><ShieldCheck size={18} /><input type="password" required value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></div></label><div className="strength-row"><span>{t('passwordStrength')}</span><strong>{t(strength)}</strong></div>{strength === 'weak' && <label className="auth-check"><input type="checkbox" checked={weakAck} onChange={(event) => setWeakAck(event.target.checked)} /><span>{t('weakPasswordAck')}</span></label>}</>}
+          {screen === 'signup' && <><label className="auth-check"><input type="checkbox" checked={createRecovery} onChange={(event) => setCreateRecovery(event.target.checked)} /><span>{t('createRecovery')}</span></label><label className="auth-check"><input type="checkbox" required checked={riskAck} onChange={(event) => setRiskAck(event.target.checked)} /><span>{t('understandRisk')}</span></label><label className="auth-select"><span>{t('language')}</span><select value={lang} onChange={(event) => setLang(event.target.value as Lang)}><option value="id">Bahasa Indonesia</option><option value="en">English</option></select></label></>}
+          {isLogin && (
+            <div className="auth-form-options">
+              <label className="auth-inline-check">
+                <input type="checkbox" defaultChecked />
+                <span>{t('rememberTabConnected')}</span>
+              </label>
+              <button type="button" className="auth-recovery-link" onClick={() => onScreen('recover')}>
+                <KeyRound size={15} />
+                <span>{t('useRecovery')}</span>
+              </button>
+            </div>
+          )}
+          {error && <p className="form-error">{error}</p>}
+          <button className="primary auth-submit" disabled={busy || (!isLogin && strength === 'weak' && !weakAck)}>
+            <LockKeyhole size={16} />
+            <span>{busy ? t('working') : isLogin ? t('openVault') : isRecover ? t('recover') : t('createOpen')}</span>
+          </button>
+        </form>
+        <div className="auth-card-footer">
+          {isLogin && (
+            <p className="auth-switch-text">
+              <span>{t('notConfiguredYet')}</span>
+              <button type="button" className="link-action" onClick={() => onScreen('signup')}>{t('createNewVaultLink')}</button>
+            </p>
+          )}
+          {isRecover && (
+            <button type="button" className="link-button" onClick={() => onScreen('login')}>{t('switchToLogin')}</button>
+          )}
+        </div>
+        <div className="auth-security-notice">
+          <ShieldAlert size={20} className="notice-icon" />
+          <div>
+            <strong>{t('noLoginThrottleTitle')}</strong>
+            <p>{t('noLoginThrottleText')}</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
 }
 
 function RowMenu({ item, edit, reload, announce, t }: { item: Credential; edit: () => void; reload: () => Promise<void>; announce: (value: string) => void; t: (key: any) => string }) {
