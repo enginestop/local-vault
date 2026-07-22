@@ -8,7 +8,7 @@ _pool: Optional[asyncpg.Pool] = None
 def database_url() -> str:
     return os.environ.get(
         "DATABASE_URL",
-        "postgresql://localvault:localvault@localhost:5432/localvault",
+        "postgresql://default:lafbVK2ijS3v@ep-ancient-art-a405hexn-pooler.us-east-1.aws.neon.tech/projek_adip?sslmode=require&channel_binding=require",
     )
 
 
