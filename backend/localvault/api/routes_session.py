@@ -80,7 +80,7 @@ async def register(request: Request, body: RegisterRequest) -> SessionResult:
     return SessionResult(
         token=token,
         session_id=session.session_id,
-        user_id=user.id,
+        user_id=str(user.id),
         username=user.username,
         email=user.email,
         recovery_key=vault.get("recovery_key"),
@@ -138,7 +138,7 @@ async def login(request: Request, body: LoginRequest) -> SessionResult:
     return SessionResult(
         token=token,
         session_id=session.session_id,
-        user_id=user.id,
+        user_id=str(user.id),
         username=user.username,
         email=user.email,
     )
