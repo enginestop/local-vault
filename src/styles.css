@@ -663,18 +663,48 @@ td { color: #3f5048; font-size: 12.5px; }
   margin-top: -2px;
 }
 
+.auth-check, .auth-inline-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+.auth-check input, .auth-inline-check input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  margin: 1px 0 0;
+  accent-color: #34d399;
+}
+.auth-check span { flex: 1; }
+.modal-form > label.auth-check {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 14px 0;
+  color: #5d6a64;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
 .auth-inline-check {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 9px;
   color: #94a3b8;
   font-size: 12px;
   cursor: pointer;
 }
 
 .auth-inline-check input {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  margin: 1px 0 0;
   accent-color: #34d399;
   cursor: pointer;
 }
@@ -826,6 +856,7 @@ td { color: #3f5048; font-size: 12.5px; }
   .auth-risk-check { background: #352e20; border-color: #62512d; }
   .auth-text-button, .auth-switch button { color: #91d2b0; }
   .auth-safety-note { background: #352f21; color: #ebd19c; }
+  .modal-form > label.auth-check { color: #cbd6d0; }
 }
 
 /* Interactive behavior added by the functional UI. */
