@@ -101,7 +101,12 @@ def create_app(data_dir: str, control=None) -> FastAPI:
             if origin:
                 parsed = urlparse(origin)
                 if parsed.scheme != request.url.scheme or parsed.netloc.lower() != host.lower():
-                    if PUBLIC_URL and parsed.geturl().rstrip("/") == PUBLIC_URL:
+                    local_dev_origin = (
+                        parsed.scheme == request.url.scheme
+                        and parsed.hostname in _allowed_hosts()
+                        and parsed.port == 5173
+                    )
+                    if PUBLIC_URL and parsed.geturl().rstrip("/") == PUBLIC_URL or local_dev_origin:
                         pass
                     else:
                         response = errors.problem_response(
