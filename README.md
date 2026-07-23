@@ -106,10 +106,6 @@ Sebelum menjalankan backend, pastikan PostgreSQL 18 aktif, menerima koneksi pada
 `127.0.0.1:5432`, dan database `localvault` serta user `localvault` tersedia.
 Periksa konektivitas dengan:
 
-```powershell
-pg_isready -h 127.0.0.1 -p 5432 -d localvault -U localvault
-```
-
 ```bash
 pg_isready -h 127.0.0.1 -p 5432 -d localvault -U localvault
 ```
