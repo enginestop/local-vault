@@ -113,6 +113,7 @@ urutan berikut dari dua atau tiga terminal sesuai kebutuhan.
 
    ```powershell
    $env:DATABASE_URL = "postgresql://localvault:localvault@127.0.0.1:5432/localvault"
+   $env:PUBLIC_URL = "http://127.0.0.1:5173"
    Set-Location backend
    & .\.venv313\Scripts\python.exe run.py
    ```
@@ -121,6 +122,7 @@ urutan berikut dari dua atau tiga terminal sesuai kebutuhan.
 
    ```bash
    export DATABASE_URL="postgresql://localvault:localvault@127.0.0.1:5432/localvault"
+   export PUBLIC_URL="http://127.0.0.1:5173"
    cd backend
    .venv313/bin/python run.py
    ```
