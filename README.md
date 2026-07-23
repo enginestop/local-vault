@@ -51,7 +51,7 @@ secret yang dibuka. Karena itu:
 - ekspor CSV adalah **plaintext** pada perangkat yang mengunduhnya. Amankan dan
   hapus file tersebut setelah digunakan.
 
-Detail lengkap tersedia di [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
+Spesifikasi normatif tersedia di [documentation/SRS.md](documentation/SRS.md).
 
 ## Alur akun dan login
 
@@ -205,17 +205,14 @@ localVault/
 │   ├── localvault/          # FastAPI, domain, crypto, services, launcher
 │   └── requirements*.txt    # dependency direct dan lock transitif
 ├── src/                     # React, TypeScript, i18n, dan unit tests
-├── tests/e2e/               # Playwright workflows
-├── docs/                    # threat model serta recovery/upgrade
-└── SRS.md                   # kontrak normatif LocalVault v1
+├── documentation/           # spesifikasi dan dokumentasi teknis
+└── deployment/              # konfigurasi Docker dan environment example
 ```
 
 ## Dokumentasi
 
-- [SRS.md](SRS.md) — kontrak normatif dan acceptance test v1;
-- [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) — batas perlindungan dan risiko;
-- [docs/RECOVERY_AND_UPGRADE.md](docs/RECOVERY_AND_UPGRADE.md) — backup, restore,
-  recovery, dan upgrade aman.
+- [documentation/SRS.md](documentation/SRS.md) — kontrak normatif dan acceptance
+  test v1.
 
 ## Lisensi
 
@@ -226,8 +223,13 @@ approval pendaftaran, status akun, role, dan membership vault. User pertama
 otomatis menjadi Superadmin; pendaftaran berikutnya berstatus `pending`.
 
 Untuk development, reset database secara eksplisit dan jangan migrasikan user
-lama tanpa backup. Docker tersedia melalui `docker compose up --build` dengan
-`.env` berdasarkan `.env.example`. Pada VPS/cloud, gunakan reverse proxy HTTPS,
+lama tanpa backup. Docker tersedia melalui:
+
+```bash
+docker compose -f deployment/docker-compose.yml up --build
+```
+
+Gunakan `.env` berdasarkan `deployment/.env.example`. Pada VPS/cloud, gunakan reverse proxy HTTPS,
 batasi trusted hosts/CORS, dan jangan mengekspos port HTTP langsung ke internet.
 Akses publik wajib menggunakan HTTPS.
 
