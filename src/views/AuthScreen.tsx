@@ -71,7 +71,6 @@ export function AuthScreen({ screen, setupRequired, lang, setLang, t, onSuccess,
           {error && <p className="form-error">{error}</p>}
           <div className="auth-card-footer"><p className="auth-switch-text"><span>{setupRequired ? t('notConfiguredYet') : t('alreadyConfigured')}</span>{setupRequired ? <button type="button" className="link-action" onClick={() => onScreen('signup')}>{t('createFirstAccount')} ›</button> : <button type="button" className="link-action" onClick={() => onScreen('recover')}>{t('useRecovery')}</button>}</p><div className="auth-security-notice"><ShieldAlert className="notice-icon" size={17} /><div><strong>{t('noLoginThrottleTitle')}</strong><p>{t('noLoginThrottleText')}</p></div></div></div>
           {isRecover && <button type="button" className="link-button" onClick={() => onScreen('login')}>{t('switchToLogin')}</button>}
-          <button type="button" className="auth-text-button" onClick={retry}>{t('retry')}</button>
         </section>
       </main>
     </div>
