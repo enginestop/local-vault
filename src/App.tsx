@@ -16,7 +16,7 @@ import {
   Tags, Trash2, Upload, Vault, Wifi, X,
 } from 'lucide-react'
 import {
-  ApiError, api, getToken, saveBlob, setToken, websocketUrl,
+  ApiError, api, getToken, resetTabId, saveBlob, setToken, websocketUrl,
   type BackupItem, type Category, type Credential, type ImportPreview,
   type Lang, type SecurityStatus, type SessionResult, type VaultSettings,
 } from './api'
@@ -131,7 +131,11 @@ export default function App() {
         if (status.setup_required) { bootSettled.current = true; setToken(null); setScreen('login'); return }
         if (status.locked || !getToken()) { bootSettled.current = true; setToken(null); setScreen('login'); return }
         try { await api.current(); if (!cancelled) { bootSettled.current = true; await enterApp() } }
-        catch { if (!cancelled) { bootSettled.current = true; setToken(null); setScreen('login') } }
+        catch {
+          try { await api.logout() } catch { /* session may already be invalid */ }
+          resetTabId()
+          if (!cancelled) { bootSettled.current = true; setToken(null); setScreen('login') }
+        }
       } catch { if (!cancelled) { bootSettled.current = true; setScreen('offline') } }
     }
     void boot()
@@ -140,6 +144,7 @@ export default function App() {
 
   useEffect(() => {
     function ended(): void {
+      resetTabId()
       setCredentials([]); setCategories([]); setTags([]); setSelectedRows([]); setSelectedId(null); setModal(null); setScreen('login')
     }
     window.addEventListener('localvault:session-ended', ended)
@@ -227,7 +232,7 @@ export default function App() {
     setBusy(true)
     try {
       await api.lock()
-      setToken(null); setCredentials([]); setScreen('login')
+      setToken(null); resetTabId(); setCredentials([]); setScreen('login')
     } catch (error) { announce(`${t('lockUnconfirmed')}: ${errorText(error)}`) }
     finally { setBusy(false) }
   }

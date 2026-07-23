@@ -216,7 +216,7 @@ async def current(request: Request) -> CurrentSessionResponse:
         raise errors.SessionInvalid()
     return CurrentSessionResponse(
         session_id=session.session_id,
-        user_id=user.id,
+        user_id=str(user.id),
         username=user.username,
         email=user.email,
         client_label=session.client_label,

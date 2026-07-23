@@ -149,6 +149,12 @@ export function getTabId(): string {
   return value
 }
 
+export function resetTabId(): string {
+  const value = crypto.randomUUID()
+  sessionStorage.setItem(TAB_KEY, value)
+  return value
+}
+
 export function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const currentToken = getToken()
   return currentToken
