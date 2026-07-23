@@ -47,6 +47,11 @@ class SessionResult(BaseModel):
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(request: Request, body: RegisterRequest) -> SessionResult:
     ctx: AppContext = request.app.state.ctx
+    from ..database.pool import get_pool
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        if await conn.fetchval("SELECT count(*) FROM users"):
+            raise errors.SetupAlreadyCompleted()
     username = body.username.strip()
     email = body.email.strip().lower()
     if not username:

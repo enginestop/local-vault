@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { LockKeyhole, ShieldCheck, KeyRound, HardDrive, ChevronDown, Eye, EyeOff, Globe, Wifi } from 'lucide-react'
-import { api, type Lang, type SessionResult } from '../api'
+import { api, ApiError, type Lang, type SessionResult } from '../api'
 import { errorText, strengthOf } from '../utils/helpers'
 import './SignupScreen.css'
 import type { Screen } from '../types'
@@ -40,8 +40,9 @@ export function SignupScreen({ activeHost, lang, setLang, t, onSuccess, onScreen
         weak_password_acknowledged: weakAck,
         http_lan_risk_acknowledged: riskAck 
       }))
-    } catch (reason) { 
-      setError(errorText(reason)) 
+    } catch (reason) {
+      const accountExists = reason instanceof ApiError && ['USERNAME_TAKEN', 'EMAIL_TAKEN', 'SETUP_ALREADY_COMPLETED'].includes(reason.code)
+      setError(accountExists ? t('accountAlreadyExists') : errorText(reason))
     } finally { 
       setBusy(false) 
     }
