@@ -111,7 +111,11 @@ Browser hanya berkomunikasi dengan origin LocalVault. Tidak ada font, script, st
 
 ### 2.2 Profil pengguna
 
-Produk memiliki tepat satu identitas pemilik berbasis master password dan tidak memiliki akun, role, izin per-item, atau sharing. Pemilik diasumsikan mampu menjalankan host lokal dari source, membuka alamat LAN, dan memahami peringatan bahwa CSV hasil ekspor tidak terenkripsi.
+Produk memiliki akun pengguna berbasis master password dengan dua role (`superadmin`
+dan `user`), status akun (`pending`, `active`, atau `disabled`), serta shared vault
+dan personal vault berdasarkan membership. Pemilik deployment diasumsikan mampu
+menjalankan host lokal dari source, membuka alamat LAN, dan memahami peringatan
+bahwa CSV hasil ekspor tidak terenkripsi.
 
 ### 2.3 Lingkungan operasi
 
@@ -191,7 +195,17 @@ Struktur direktori normatif:
 | SET-008 | Jika dipilih, recovery key HARUS ditampilkan tepat satu kali setelah transaksi setup berhasil, tidak boleh dicatat ke log atau dapat diminta ulang. Pengguna harus mengonfirmasi telah menyimpannya sebelum meninggalkan layar. |
 | SET-009 | Jika recovery dilewati, UI HARUS menyatakan bahwa kehilangan master password membuat data tidak dapat dipulihkan. |
 
-### 4.2 Unlock, sesi, dan lock
+### 4.2 Akun, approval, dan membership vault
+
+| ID | Persyaratan |
+|---|---|
+| USR-001 | User pertama yang terdaftar HARUS menjadi `superadmin` dan berstatus `active`; pendaftaran berikutnya HARUS berstatus `pending` sampai disetujui Superadmin. |
+| USR-002 | Username dan email HARUS unik. Pelanggaran constraint unik HARUS dipetakan menjadi konflik yang dapat ditindaklanjuti, bukan error internal generik. |
+| USR-003 | Akun `pending` atau `disabled` TIDAK BOLEH login. Setelah approval, login pertama HARUS membuat vault personal bila vault user belum ada, menggunakan master password yang baru diverifikasi. |
+| USR-004 | Endpoint profile HARUS mengembalikan `id` sebagai string UUID yang stabil untuk client JSON. |
+| USR-005 | Superadmin BOLEH mengubah status akun dan membership sesuai aturan administrasi; user biasa tidak boleh mengakses operasi administrasi. |
+
+### 4.3 Unlock, sesi, dan lock
 
 | ID | Persyaratan |
 |---|---|
@@ -208,6 +222,7 @@ Struktur direktori normatif:
 | SES-011 | Banyak tab/perangkat dengan token berbeda BOLEH aktif bersamaan. Vault plaintext server BOLEH dipakai bersama selama sedikitnya satu sesi valid ada, tetapi harus dibersihkan best-effort saat sesi terakhir berakhir. |
 | SES-012 | Aplikasi TIDAK BOLEH menerapkan delay, throttling, CAPTCHA, atau lockout atas kegagalan unlock. Respons gagal tidak boleh membedakan salah master password, envelope rusak, atau vault ID tidak cocok. |
 | SES-013 | Reautentikasi master password HARUS diminta hanya untuk ekspor plaintext dan reset vault. Pergantian master password secara inheren memerlukan master lama; aksi kritis lain cukup dengan sesi unlocked. |
+| SES-014 | Logout manual HARUS membatalkan sesi pemanggil, membersihkan token dan state rahasia frontend, lalu mengarahkan pengguna ke layar login. |
 
 Memasukkan master/recovery historis untuk membuka backup yang tidak dapat dibuka oleh DEK sesi aktif adalah input dekripsi kandidat, bukan reautentikasi atas vault aktif, dan hanya boleh diminta pada kondisi BAK-008.
 
@@ -558,6 +573,7 @@ Tidak boleh ada table credential/category/tag/history/session/import plaintext. 
 | `POST /api/v1/sessions/recover` | publik | `{recovery_key,new_master_password,confirm_new_master_password,weak_password_acknowledged,tab_instance_id}` → token dan recovery key baru satu kali. |
 | `GET /api/v1/sessions/current` | Bearer | Metadata sesi dan vault revision, tanpa token. |
 | `POST /api/v1/sessions/lock` | Bearer | Membatalkan sesi pemanggil. |
+| `POST /api/v1/sessions/logout` | Bearer | Membatalkan sesi pemanggil dan mengakhiri sesi aplikasi dengan respons `204`. |
 | `POST /api/v1/sessions/lock-all` | Bearer | Membatalkan semua sesi. |
 | `POST /api/v1/sessions/event-ticket` | Bearer | Ticket CSPRNG 256-bit, single-use, berlaku 10 detik untuk WebSocket; ticket tidak boleh dicatat. |
 

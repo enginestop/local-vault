@@ -37,6 +37,8 @@ export function relativeTime(value: string, lang: Lang): string {
 }
 
 export function errorText(error: unknown): string {
-  if (error instanceof ApiError) return error.requestId ? `${error.detail} (${error.requestId})` : error.detail
+  // Request IDs remain available on ApiError for diagnostics, but should not
+  // leak into user-facing messages as confusing UUIDs.
+  if (error instanceof ApiError) return error.detail
   return error instanceof Error && error.message ? error.message : 'Request failed'
 }

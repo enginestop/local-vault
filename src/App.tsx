@@ -11,7 +11,7 @@ import {
   ArchiveRestore, ArrowDownUp, Check, ChevronDown, CircleHelp, Clipboard,
   Copy, DatabaseBackup, Download, Ellipsis, ExternalLink, Eye, EyeOff,
   FileDown, FileUp, Folder, Globe2, HardDrive, History, KeyRound,
-  LockKeyhole, Menu, MoreHorizontal, Plus, RefreshCw, RotateCcw, Search,
+  LockKeyhole, LogOut, Menu, MoreHorizontal, Plus, RefreshCw, RotateCcw, Search,
   Settings, ShieldAlert, ShieldCheck, SlidersHorizontal, Sparkles, Star,
   Tags, Trash2, Upload, Vault, Wifi, X,
 } from 'lucide-react'
@@ -243,6 +243,25 @@ export default function App() {
     finally { setBusy(false) }
   }
 
+  async function logout(): Promise<void> {
+    setBusy(true)
+    try {
+      await api.logout()
+      setToken(null)
+      resetTabId()
+      setCredentials([])
+      setCategories([])
+      setTags([])
+      setSelectedRows([])
+      setSelectedId(null)
+      setProfile(null)
+      setVaults([])
+      setAdminOpen(false)
+      setScreen('login')
+    } catch (error) { announce(errorText(error)) }
+    finally { setBusy(false) }
+  }
+
   async function reload(): Promise<void> {
     try { await loadAll() } catch (error) { announce(errorText(error)) }
   }
@@ -285,7 +304,7 @@ export default function App() {
       <header className="topbar">
         <IconButton label={t('openMenu')} className="mobile-menu" onClick={() => setMobileNav(true)}><Menu size={20} /></IconButton>
         <div className="search-wrap"><Search size={18} /><input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('searchPlaceholder')} aria-label={t('searchPlaceholder')} /><kbd>/</kbd>{query && <button onClick={() => setQuery('')} aria-label={t('clear')}><X size={15} /></button>}</div>
-        <div className="top-actions"><label className="language-switcher"><span className="sr-only">{t('language')}</span><select value={lang} onChange={(event) => { const next = event.target.value as Lang; setLang(next); localStorage.setItem('lv_lang', next) }} aria-label={t('language')}><option value="id">ID</option><option value="en">EN</option></select></label><span className="connection"><Wifi size={15} /> {t('connected')}</span><IconButton label={t('help')} onClick={() => setModal({ kind: 'help' })}><CircleHelp size={18} /></IconButton><button className="lock-button" disabled={busy} onClick={() => void lock()}><LockKeyhole size={16} /><span>{t('lock')}</span></button></div>
+        <div className="top-actions"><label className="language-switcher"><span className="sr-only">{t('language')}</span><select value={lang} onChange={(event) => { const next = event.target.value as Lang; setLang(next); localStorage.setItem('lv_lang', next) }} aria-label={t('language')}><option value="id">ID</option><option value="en">EN</option></select></label><span className="connection"><Wifi size={15} /> {t('connected')}</span><IconButton label={t('help')} onClick={() => setModal({ kind: 'help' })}><CircleHelp size={18} /></IconButton><button className="lock-button" disabled={busy} onClick={() => void lock()}><LockKeyhole size={16} /><span>{t('lock')}</span></button><button className="logout-button" disabled={busy} onClick={() => void logout()}><LogOut size={16} /><span>{t('logout')}</span></button></div>
       </header>
 
       {adminOpen ? <AdminView announce={announce} close={() => setAdminOpen(false)} /> : view === 'backup'

@@ -35,7 +35,7 @@ class UserProfileResponse(BaseModel):
 async def get_profile(request: Request) -> UserProfileResponse:
     user = await require_user(request)
     return UserProfileResponse(
-        id=user.id,
+        id=str(user.id),
         username=user.username,
         email=user.email,
         display_name=user.display_name,
@@ -56,7 +56,7 @@ async def update_profile(request: Request, body: UpdateProfileRequest) -> UserPr
         display_name=body.display_name.strip() if body.display_name else None,
     )
     return UserProfileResponse(
-        id=updated.id,
+        id=str(updated.id),
         username=updated.username,
         email=updated.email,
         display_name=updated.display_name,

@@ -139,7 +139,15 @@ async def legacy_setup(request: Request, body: LegacySetupRequest) -> dict:
 async def login(request: Request, body: LoginRequest) -> SessionResult:
     ctx: AppContext = request.app.state.ctx
     user = await authenticate(body.login, body.master_password)
-    await ctx.vault.unlock(user.id, body.master_password)
+    try:
+        await ctx.vault.unlock(user.id, body.master_password)
+    except errors.ProblemError as exc:
+        # Accounts registered while approval was required did not have a
+        # vault yet.  Once approved, the first successful login has the
+        # plaintext master password needed to create it safely.
+        if exc.code != "VAULT_NOT_FOUND":
+            raise
+        await ctx.vault.setup(user.id, body.master_password, False, "id")
     await ensure_user_vaults(user.id, body.master_password)
     sm: SessionManager = ctx.sessions
     token = _new_token()

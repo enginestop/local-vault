@@ -58,7 +58,10 @@ async def register(
                 user_id, username, email, password_hash,
             )
         except Exception as ex:
-            pgcode = getattr(ex, "pgcode", "")
+            # asyncpg exposes PostgreSQL's SQLSTATE as ``sqlstate``.  Using
+            # ``pgcode`` here leaves unique constraint violations unhandled,
+            # which turns a normal duplicate signup into a generic 500.
+            pgcode = getattr(ex, "sqlstate", getattr(ex, "pgcode", ""))
             if pgcode == "23505":
                 detail = str(ex)
                 if "users_username" in detail or "idx_users_username" in detail:
@@ -180,7 +183,7 @@ async def update_profile(
                 *params,
             )
         except Exception as ex:
-            pgcode = getattr(ex, "pgcode", "")
+            pgcode = getattr(ex, "sqlstate", getattr(ex, "pgcode", ""))
             if pgcode == "23505":
                 detail = str(ex)
                 if "users_username" in detail or "idx_users_username" in detail:

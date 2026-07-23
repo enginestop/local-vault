@@ -62,10 +62,16 @@ key, dan acknowledgement risiko HTTP LAN. Form tersebut membuat akun melalui
 
 Setelah akun pertama dibuat, setup ditutup dan tombol pembuatan akun tidak lagi
 ditampilkan. Akses berikutnya menggunakan username atau email serta master
-password melalui login. Recovery key hanya ditampilkan satu kali jika opsi
-recovery diaktifkan; simpan di tempat aman karena LocalVault tidak menyediakan
-pemulihan oleh pihak ketiga. HTTP LAN tidak terenkripsi, sehingga setup dan
-login hanya boleh dilakukan pada jaringan tepercaya.
+password melalui login. Pendaftaran berikutnya berstatus `pending` sampai
+disetujui Superadmin; akun yang baru disetujui membuat vault personal pada
+login pertamanya. Username dan email harus unik, dan konflik pendaftaran
+ditampilkan sebagai error yang dapat ditindaklanjuti.
+
+Recovery key hanya ditampilkan satu kali jika opsi recovery diaktifkan; simpan
+di tempat aman karena LocalVault tidak menyediakan pemulihan oleh pihak ketiga.
+Saat sesi aktif, gunakan **Lock** untuk mengunci vault dan **Keluar** untuk
+mengakhiri sesi serta kembali ke layar login. HTTP LAN tidak terenkripsi,
+sehingga setup dan login hanya boleh dilakukan pada jaringan tepercaya.
 
 ## Development dari source
 
