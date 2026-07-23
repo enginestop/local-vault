@@ -735,6 +735,16 @@ td { color: #3f5048; font-size: 12.5px; }
   text-decoration: underline;
 }
 
+.link-button {
+  border: 0;
+  background: transparent;
+  color: #91d2b0;
+  padding: 12px 0 0;
+  font-size: 12px;
+  cursor: pointer;
+}
+.link-button:hover { color: #b4e8cb; text-decoration: underline; }
+
 .auth-submit {
   width: 100%;
   min-height: 48px;
@@ -785,6 +795,14 @@ td { color: #3f5048; font-size: 12.5px; }
 
 .auth-switch-text .link-action:hover {
   text-decoration: underline;
+}
+
+.auth-switch-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 4px 12px;
 }
 
 .auth-security-notice {
