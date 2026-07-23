@@ -292,8 +292,18 @@ export const api = {
 
   register: (payload: Record<string, unknown>) => request<SessionResult>('POST', '/api/v1/register', { body: { ...payload, tab_instance_id: getTabId() } }),
 
-  login: (login: string, master_password: string) =>
-    request<SessionResult>('POST', '/api/v1/sessions/login', { body: { login, master_password, tab_instance_id: getTabId() } }),
+  login: async (login: string, master_password: string) => {
+    const body = () => ({ login, master_password, tab_instance_id: getTabId() })
+    try {
+      return await request<SessionResult>('POST', '/api/v1/sessions/login', { body: body() })
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'TAB_OWNERSHIP_CONFLICT') {
+        resetTabId()
+        return request<SessionResult>('POST', '/api/v1/sessions/login', { body: body() })
+      }
+      throw error
+    }
+  },
 
   unlock: (master_password: string) =>
     request<SessionResult>('POST', '/api/v1/sessions/unlock', { body: { master_password, tab_instance_id: getTabId() } }),
