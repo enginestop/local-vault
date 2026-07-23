@@ -30,6 +30,8 @@ __pycache__/
 /test-results/
 /playwright-report/
 /coverage/
+/vite-dev*.log
+/backend-dev*.log
 /.uv-cache/
 /.uv-tools/
 venv/
