@@ -13,7 +13,7 @@ export function RecoveryKeyDialog({ recoveryKey, acknowledge, t }: { recoveryKey
     saveBlob({ blob: new Blob([`${recoveryKey}\n`], { type: 'text/plain' }), filename: 'localvault-recovery-key.txt' })
   }
   return (
-    <NativeDialog title={t('recoveryKey')} closeLabel={t('close')} close={() => {}} busy>
+    <NativeDialog title={t('recoveryKey')} closeLabel={t('close')} close={() => {}} busy className="recovery-key-dialog">
       <div className="modal-form">
         <div className="plaintext-warning"><ShieldAlert size={18} /><div><strong>{t('saveRecoveryNow')}</strong><span>{t('recoveryShownOnce')}</span></div></div>
         <div className="generated-box"><span>{recoveryKey}</span><IconButton label={t('copy')} onClick={() => void copy()}><Copy size={17} /></IconButton></div>

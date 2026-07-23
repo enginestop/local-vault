@@ -878,6 +878,22 @@ td { color: #3f5048; font-size: 12.5px; }
   background: rgba(15, 29, 24, .58);
   backdrop-filter: blur(3px);
 }
+.recovery-key-dialog {
+  background: #1b2420;
+  border: 1px solid #3a4941;
+  color: #e6eee9;
+}
+.recovery-key-dialog .modal-header { border-color: #334139; }
+.recovery-key-dialog .modal-header h2 { color: #e6eee9; }
+.recovery-key-dialog .modal-form > label.auth-check { color: #cbd6d0; }
+.recovery-key-dialog .modal-actions { border-color: #334139; }
+.recovery-key-dialog .secondary {
+  background: #202b26;
+  border-color: #3b4942;
+  color: #d0ddd6;
+}
+.recovery-key-dialog .secondary:hover { background: #2a3932; }
+.recovery-key-dialog .generated-box { background: #202b26; border-color: #46554d; color: #d9e5de; }
 .mobile-help { display: none; }
 .row-menu { position: relative; }
 .row-menu summary {
