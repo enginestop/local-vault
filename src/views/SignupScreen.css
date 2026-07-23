@@ -382,7 +382,7 @@
 /* Option Cards (Checkboxes) */
 .signup-option-card {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   padding: 14px;
   background-color: rgba(255, 255, 255, 0.03);
@@ -408,43 +408,18 @@
 }
 
 .signup-checkbox {
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 4px;
-  background-color: rgba(255, 255, 255, 0.05);
-  position: relative;
+  appearance: auto;
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: #5AB27A;
   cursor: pointer;
-  flex: 0 0 auto;
+  flex: 0 0 18px;
 }
 
-.signup-checkbox:checked {
-  background-color: #5AB27A;
-  border-color: #5AB27A;
-}
+.signup-checkbox.warning-check { accent-color: #D8A755; }
 
-.signup-checkbox.warning-check:checked {
-  background-color: #F6E6B3;
-  border-color: #F6E6B3;
-}
-
-.signup-checkbox:checked::after {
-  content: '';
-  position: absolute;
-  left: 5px;
-  top: 2px;
-  width: 3px;
-  height: 7px;
-  border: solid white;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-
-.signup-checkbox.warning-check:checked::after {
-  border: solid #6D4B15;
-  border-width: 0 2px 2px 0;
-}
+.signup-checkbox-group { display: flex; align-items: flex-start; gap: 10px; }
 
 .signup-option-content {
   display: flex;
