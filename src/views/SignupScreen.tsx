@@ -57,7 +57,7 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
           LocalVault
         </div>
         <div className="signup-connection">
-          <label className="signup-language-switcher"><span className="sr-only">{t('language')}</span><select value={lang} onChange={(event) => setLang(event.target.value as Lang)} aria-label={t('language')}><option value="id">ID</option><option value="en">EN</option></select></label><Wifi size={14} /> {t('lanActive')} <span>192.168.1.24:8080</span>
+          <label className="signup-language-switcher"><span className="sr-only">{t('language')}</span><select value={lang} onChange={(event) => setLang(event.target.value as Lang)} aria-label={t('language')}><option value="id">ID</option><option value="en">EN</option></select></label><Wifi size={14} /> {t('lanActive')} <span>{window.location.host}</span>
         </div>
       </header>
 
