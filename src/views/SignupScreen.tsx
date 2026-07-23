@@ -57,7 +57,7 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
           LocalVault
         </div>
         <div className="signup-connection">
-          <Wifi size={14} /> Host lokal aktif <span>192.168.1.24:8080</span>
+          <label className="signup-language-switcher"><span className="sr-only">{t('language')}</span><select value={lang} onChange={(event) => setLang(event.target.value as Lang)} aria-label={t('language')}><option value="id">ID</option><option value="en">EN</option></select></label><Wifi size={14} /> {t('lanActive')} <span>192.168.1.24:8080</span>
         </div>
       </header>
 
@@ -66,15 +66,15 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
         <div className="signup-left">
           
           <div className="signup-badge">
-            VAULT PRIBADI • TANPA CLOUD
+            {t('signupBadge')}
           </div>
           
           <h1 className="signup-hero">
-            Kendalikan password<br />Anda sendiri.
+            {t('signupHeroLine1')}<br />{t('signupHeroLine2')}
           </h1>
           
           <p className="signup-description">
-            Buat vault lokal terenkripsi. Tidak ada akun online, sinkronisasi cloud, atau pemulihan oleh pihak ketiga.
+            {t('signupDescription')}
           </p>
           
           <div className="signup-highlight">
@@ -83,7 +83,7 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
             </div>
             <div className="signup-highlight-content">
               <h3>AES-256-GCM</h3>
-              <p>Data terenkripsi saat tersimpan</p>
+              <p>{t('dataEncryptedAtRest')}</p>
             </div>
           </div>
           
@@ -93,8 +93,8 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
                 <HardDrive size={18} />
               </div>
               <div className="signup-feature-text">
-                <h4>Tersimpan lokal</h4>
-                <p>Vault dan backup tetap di host Anda.</p>
+                <h4>{t('savedLocally')}</h4>
+                <p>{t('savedLocallySub')}</p>
               </div>
             </div>
             <div className="signup-feature-item">
@@ -102,8 +102,8 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
                 <ShieldCheck size={18} />
               </div>
               <div className="signup-feature-text">
-                <h4>Satu master password</h4>
-                <p>Tidak disimpan dan tidak dikirim keluar.</p>
+                <h4>{t('singleMasterPassword')}</h4>
+                <p>{t('singleMasterPasswordSub')}</p>
               </div>
             </div>
             <div className="signup-feature-item">
@@ -111,8 +111,8 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
                 <KeyRound size={18} />
               </div>
               <div className="signup-feature-text">
-                <h4>Recovery opsional</h4>
-                <p>Simpan sendiri recovery key Anda.</p>
+                <h4>{t('optionalRecovery')}</h4>
+                <p>{t('optionalRecoverySub')}</p>
               </div>
             </div>
           </div>
@@ -121,9 +121,9 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
         {/* Right Column */}
         <div className="signup-right">
           <div className="signup-card">
-            <span className="signup-card-badge">SIGN UP • FIRST SETUP</span>
-            <h2 className="signup-card-title">Buat vault baru</h2>
-            <p className="signup-card-subtitle">Username dan email digunakan sebagai identitas akun. Vault tetap dilindungi master password.</p>
+            <span className="signup-card-badge">{t('signupCardBadge')}</span>
+            <h2 className="signup-card-title">{t('signupCardTitle')}</h2>
+            <p className="signup-card-subtitle">{t('signupCardSubtitle')}</p>
             
             <form className="signup-form" onSubmit={(event) => void submit(event)}>
               <div className="signup-form-group">
@@ -143,7 +143,7 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
               </div>
               
               <div className="signup-form-group">
-                <label className="signup-label" htmlFor="signup-master">Master password</label>
+                <label className="signup-label" htmlFor="signup-master">{t('masterPassword')}</label>
                 <div className="signup-input-wrapper">
                   <LockKeyhole size={18} className="signup-input-icon-left" />
                   <input 
@@ -152,7 +152,7 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
                     id="signup-master" className="signup-input"
                     value={master} 
                     onChange={(event) => setMaster(event.target.value)} 
-                    placeholder="Buat master password"
+                    placeholder={t('masterPasswordPlaceholder')}
                   />
                   <button type="button" className="signup-input-icon-right" onClick={() => setShowMaster(!showMaster)}>
                     {showMaster ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -161,7 +161,7 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
               </div>
               
               <div className="signup-form-group">
-                <label className="signup-label" htmlFor="signup-confirm">Konfirmasi master password</label>
+                <label className="signup-label" htmlFor="signup-confirm">{t('confirmMaster')}</label>
                 <div className="signup-input-wrapper">
                   <ShieldCheck size={18} className="signup-input-icon-left" />
                   <input 
@@ -170,7 +170,7 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
                     id="signup-confirm" className="signup-input"
                     value={confirmation} 
                     onChange={(event) => setConfirmation(event.target.value)} 
-                    placeholder="Ulangi master password"
+                    placeholder={t('confirmMasterPlaceholder')}
                   />
                   <button type="button" className="signup-input-icon-right" onClick={() => setShowConfirm(!showConfirm)}>
                     {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -180,9 +180,9 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
 
               <div className="signup-strength-container">
                 <div className="signup-strength-header">
-                  <span className="signup-strength-label">Kekuatan master password</span>
+                  <span className="signup-strength-label">{t('passwordStrength')}</span>
                   <span className={`signup-strength-text signup-strength-text-${strength}`}>
-                    {master ? (strength === 'good' ? 'Cukup Kuat' : strength === 'strong' ? 'Kuat' : 'Lemah') : ''}
+                    {master ? t(strength) : ''}
                   </span>
                 </div>
                 <div className={`signup-strength-indicator signup-strength-${master ? strength : 'none'}`}>
@@ -191,7 +191,7 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
                   <div className="signup-strength-bar"></div>
                   <div className="signup-strength-bar"></div>
                 </div>
-                <p className="signup-strength-hint">Gunakan frasa panjang yang unik dan mudah Anda ingat.</p>
+                <p className="signup-strength-hint">{t('passwordStrengthHint')}</p>
               </div>
 
               {strength === 'weak' && master && (
@@ -207,7 +207,7 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
               )}
               
               <div className="signup-form-group">
-                <label className="signup-label">Bahasa antarmuka</label>
+                <label className="signup-label">{t('language')}</label>
                 <div className="signup-input-wrapper">
                   <Globe size={18} className="signup-input-icon-left" />
                   <select 
@@ -230,8 +230,8 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
                   onChange={(event) => setCreateRecovery(event.target.checked)} 
                 />
                 <div className="signup-option-content">
-                  <strong>Buat recovery key</strong>
-                  <span>Ditampilkan satu kali setelah vault berhasil dibuat.</span>
+                  <strong>{t('createRecovery')}</strong>
+                  <span>{t('recoveryOneTime')}</span>
                 </div>
               </label>
               
@@ -244,8 +244,8 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
                   onChange={(event) => setRiskAck(event.target.checked)} 
                 />
                 <div className="signup-option-content">
-                  <strong>Saya memahami risiko HTTP LAN</strong>
-                  <span>Traffic dan master password dapat disadap pada jaringan yang tidak tepercaya.</span>
+                  <strong>{t('httpRiskAckTitle')}</strong>
+                  <span>{t('httpRiskAckDetail')}</span>
                 </div>
               </label>
 
@@ -257,18 +257,18 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
                 disabled={isSubmitDisabled}
               >
                 <ShieldCheck size={18} />
-                {busy ? t('working') : 'Buat & buka vault'}
+                {busy ? t('working') : t('createOpen')}
               </button>
             </form>
 
             <div className="signup-footer">
-              <span className="signup-footer-text">Vault sudah pernah dibuat?</span>
+              <span className="signup-footer-text">{t('signupFooterText')}</span>
               <button 
                 type="button" 
                 className="signup-login-link"
                 onClick={() => onScreen('login')}
               >
-                Kembali ke login &gt;
+                {t('backToLogin')} &gt;
               </button>
             </div>
           </div>

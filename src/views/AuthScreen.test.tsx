@@ -16,6 +16,9 @@ const t = (key: string) => ({
   emailPlaceholder: 'nama@contoh.com',
   weakPasswordAck: 'Password lemah',
   working: 'Memproses',
+  masterPasswordPlaceholder: 'Buat master password',
+  confirmMasterPlaceholder: 'Ulangi master password',
+  createOpen: 'Buat & buka vault',
 }[key] ?? key)
 
 const session = { token: 'token', session_id: 'session', user_id: 'user', username: 'owner', email: 'owner@example.com' }

@@ -35,7 +35,7 @@ export function AuthScreen({ screen, setupRequired, lang, setLang, t, onSuccess,
     <div className="auth-page">
       <header className="auth-header">
         <div className="brand auth-brand"><span className="brand-mark"><LockKeyhole size={20} /></span>{t('appName')}</div>
-        <div className="auth-connection"><Wifi size={16} /><span>{t('lanActive')}</span><strong>192.168.1.24:8080</strong></div>
+        <div className="auth-header-actions"><label className="language-switcher"><span className="sr-only">{t('language')}</span><select value={lang} onChange={(event) => setLang(event.target.value as Lang)} aria-label={t('language')}><option value="id">ID</option><option value="en">EN</option></select></label><div className="auth-connection"><Wifi size={16} /><span>{t('lanActive')}</span><strong>192.168.1.24:8080</strong></div></div>
       </header>
       <main className="auth-layout">
         <section className="auth-intro">

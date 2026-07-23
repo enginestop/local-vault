@@ -69,6 +69,9 @@
   font-family: monospace;
 }
 
+.signup-language-switcher { display: inline-flex; align-items: center; margin-right: 4px; }
+.signup-language-switcher select { min-height: 28px; padding: 0 6px; border: 1px solid #385044; border-radius: 6px; background: #16201b; color: #bfe0cc; font-size: 10px; font-weight: 700; }
+
 /* Layout */
 .signup-container {
   display: flex;

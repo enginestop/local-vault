@@ -339,6 +339,14 @@ td { color: #3f5048; font-size: 12.5px; }
   justify-content: space-between;
 }
 
+.auth-header-actions { display: flex; align-items: center; gap: 18px; }
+.language-switcher select, .signup-language-switcher select {
+  min-height: 30px; padding: 0 8px; border: 1px solid #385044; border-radius: 7px;
+  background: #17251d; color: #bfe0cc; font-size: 11px; font-weight: 700; cursor: pointer;
+}
+.language-switcher select:focus, .signup-language-switcher select:focus { outline: 2px solid #34d399; outline-offset: 1px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
 .auth-brand {
   display: flex;
   align-items: center;
