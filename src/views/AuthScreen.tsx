@@ -62,7 +62,7 @@ export function AuthScreen({ screen, setupRequired, activeHost, lang, setLang, t
               <>
                 <label><span>{t('confirmMaster')}</span><div className="auth-input"><ShieldCheck size={18} /><input type="password" required value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></div></label>
                 <div className="strength-row"><span>{t('passwordStrength')}</span><strong>{t(strength)}</strong></div>
-                {strength === 'weak' && <label className="auth-check"><input type="checkbox" checked={weakAck} onChange={(event) => setWeakAck(event.target.checked)} /><span>{t('weakPasswordAck')}</span></label>}
+                {strength === 'weak' && <label className={`auth-check ${isRecover ? 'recovery-form-check' : ''}`}><input type="checkbox" checked={weakAck} onChange={(event) => setWeakAck(event.target.checked)} /><span>{t('weakPasswordAck')}</span></label>}
               </>
             )}
             {isLogin && <div className="auth-form-options"><label className="auth-inline-check"><input type="checkbox" />{t('rememberTabConnected')}</label><button type="button" className="auth-recovery-link" onClick={() => onScreen('recover')}><KeyRound size={15} />{t('useRecovery')}</button></div>}

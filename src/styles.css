@@ -689,6 +689,38 @@ td { color: #3f5048; font-size: 12.5px; }
   accent-color: #34d399;
 }
 .auth-check span { flex: 1; }
+.recovery-form-check {
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #3d4b44;
+  border-radius: 9px;
+  background: #202a25;
+}
+.recovery-form-check input {
+  appearance: none;
+  display: grid;
+  place-content: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 1px solid #70847a;
+  border-radius: 4px;
+  background: #17211b;
+}
+.recovery-form-check input::before {
+  content: '';
+  width: 9px;
+  height: 5px;
+  border-left: 2px solid #102019;
+  border-bottom: 2px solid #102019;
+  transform: rotate(-45deg) scale(0);
+  transition: transform .12s ease-in-out;
+}
+.recovery-form-check input:checked {
+  border-color: #34d399;
+  background: #34d399;
+}
+.recovery-form-check input:checked::before { transform: rotate(-45deg) scale(1); }
 .modal-form > label.auth-check {
   flex-direction: row;
   align-items: flex-start;
