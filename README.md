@@ -219,14 +219,26 @@ approval pendaftaran, status akun, role, dan membership vault. User pertama
 otomatis menjadi Superadmin; pendaftaran berikutnya berstatus `pending`.
 
 Untuk development, reset database secara eksplisit dan jangan migrasikan user
-lama tanpa backup. Docker tersedia melalui:
+lama tanpa backup.
+
+## Deployment Docker
+
+Pastikan Docker dan Docker Compose terinstal. Jalankan dari direktori `deployment/`:
 
 ```bash
-docker compose -f deployment/docker-compose.yml up --build
+cd deployment
+cp .env.example .env
+# Edit .env bila perlu (minimal LOCALVAULT_SECRET)
+docker compose up --build
 ```
 
-Gunakan `.env` berdasarkan `deployment/.env.example`. Pada VPS/cloud, gunakan reverse proxy HTTPS,
-batasi trusted hosts/CORS, dan jangan mengekspos port HTTP langsung ke internet.
-Akses publik wajib menggunakan HTTPS.
+Aplikasi akan berjalan di `http://<host-ip>:8741`.
+
+**Catatan:**
+- File `.env` harus berada di direktori `deployment/` (satu folder dengan `docker-compose.yml`).
+- `LOCALVAULT_DATA_DIR` sudah diisi default di `.env.example`.
+- Pada VPS/cloud, gunakan reverse proxy HTTPS, batasi trusted hosts/CORS,
+  dan jangan mengekspos port HTTP langsung ke internet.
+- Akses publik wajib menggunakan HTTPS.
 
 LocalVault tersedia di bawah [MIT License](LICENSE).

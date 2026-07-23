@@ -6,10 +6,10 @@ _pool: Optional[asyncpg.Pool] = None
 
 
 def database_url() -> str:
-    return os.environ.get(
-        "DATABASE_URL",
-        "postgresql://default:lafbVK2ijS3v@ep-ancient-art-a405hexn-pooler.us-east-1.aws.neon.tech/projek_adip?sslmode=require&channel_binding=require",
-    )
+    value = os.environ.get("DATABASE_URL", "")
+    if not value:
+        raise RuntimeError("DATABASE_URL environment variable is not set")
+    return value
 
 
 def database_schema() -> str | None:

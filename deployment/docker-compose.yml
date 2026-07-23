@@ -6,11 +6,13 @@ services:
       POSTGRES_USER: localvault
       POSTGRES_PASSWORD: localvault
     volumes:
-      - localvault-db:/var/lib/postgresql/data
+      - localvault-db:/var/lib/postgresql
   app:
     build:
       context: ..
       dockerfile: deployment/Dockerfile
+    environment:
+      LOCALVAULT_DATA_DIR: /app/data
     env_file: .env
     depends_on:
       - db
