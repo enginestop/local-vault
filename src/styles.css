@@ -896,6 +896,22 @@ td { color: #3f5048; font-size: 12.5px; }
 .recovery-key-dialog .modal-header { border-color: #334139; }
 .recovery-key-dialog .modal-header h2 { color: #e6eee9; }
 .recovery-key-dialog .modal-form > label.auth-check { color: #cbd6d0; }
+.recovery-key-dialog .auth-check {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  margin: 14px 0;
+  line-height: 18px;
+}
+.recovery-key-dialog .auth-check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #34d399;
+  cursor: pointer;
+}
+.recovery-key-dialog .auth-check span { min-width: 0; }
 .recovery-key-dialog .modal-actions { border-color: #334139; }
 .recovery-key-dialog .secondary {
   background: #202b26;
