@@ -120,6 +120,7 @@ export interface StatusResult {
   locked?: boolean
   recovery_enabled?: boolean
   http_lan_warning?: boolean
+  network_host?: string
 }
 
 const TOKEN_KEY = 'lv_token'

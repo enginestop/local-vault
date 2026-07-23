@@ -5,7 +5,7 @@ import { errorText, strengthOf } from '../utils/helpers'
 import type { Screen } from '../types'
 import { SignupScreen } from './SignupScreen'
 
-export function AuthScreen({ screen, setupRequired, lang, setLang, t, onSuccess, onScreen, retry }: { screen: Screen; setupRequired: boolean; lang: Lang; setLang: (lang: Lang) => void; t: (key: any) => string; onSuccess: (result: SessionResult) => void; onScreen: (screen: Screen) => void; retry: () => void }) {
+export function AuthScreen({ screen, setupRequired, activeHost, lang, setLang, t, onSuccess, onScreen, retry }: { screen: Screen; setupRequired: boolean; activeHost?: string; lang: Lang; setLang: (lang: Lang) => void; t: (key: any) => string; onSuccess: (result: SessionResult) => void; onScreen: (screen: Screen) => void; retry: () => void }) {
   const [master, setMaster] = useState('')
   const [login, setLogin] = useState('')
   const [confirmation, setConfirmation] = useState('')
@@ -16,7 +16,7 @@ export function AuthScreen({ screen, setupRequired, lang, setLang, t, onSuccess,
   
   if (screen === 'boot') return <div className="auth-page loading-state"><RefreshCw className="spin" /><p>{t('loading')}</p></div>
   if (screen === 'offline') return <div className="auth-page loading-state"><ShieldAlert /><h1>{t('serverUnavailable')}</h1><button className="primary" onClick={retry}>{t('retry')}</button></div>
-  if (screen === 'signup') return <SignupScreen lang={lang} setLang={setLang} t={t} onSuccess={onSuccess} onScreen={onScreen} />
+  if (screen === 'signup') return <SignupScreen activeHost={activeHost} lang={lang} setLang={setLang} t={t} onSuccess={onSuccess} onScreen={onScreen} />
   
   const isLogin = screen === 'login'
   const isRecover = screen === 'recover'
@@ -35,7 +35,7 @@ export function AuthScreen({ screen, setupRequired, lang, setLang, t, onSuccess,
     <div className="auth-page">
       <header className="auth-header">
         <div className="brand auth-brand"><span className="brand-mark"><LockKeyhole size={20} /></span>{t('appName')}</div>
-        <div className="auth-header-actions"><label className="language-switcher"><span className="sr-only">{t('language')}</span><select value={lang} onChange={(event) => setLang(event.target.value as Lang)} aria-label={t('language')}><option value="id">ID</option><option value="en">EN</option></select></label><div className="auth-connection"><Wifi size={16} /><span>{t('lanActive')}</span><strong>{window.location.host}</strong></div></div>
+        <div className="auth-header-actions"><label className="language-switcher"><span className="sr-only">{t('language')}</span><select value={lang} onChange={(event) => setLang(event.target.value as Lang)} aria-label={t('language')}><option value="id">ID</option><option value="en">EN</option></select></label><div className="auth-connection"><Wifi size={16} /><span>{t('lanActive')}</span><strong>{activeHost || window.location.host}</strong></div></div>
       </header>
       <main className="auth-layout">
         <section className="auth-intro">

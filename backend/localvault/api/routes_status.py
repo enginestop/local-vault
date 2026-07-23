@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
+import socket
 
 from ..app_context import AppContext
 
@@ -14,6 +15,7 @@ class StatusResponse(BaseModel):
     port: int
     recovery_enabled: bool = False
     http_lan_warning: bool = True
+    network_host: str | None = None
 
 
 @router.get("/status")
@@ -30,4 +32,17 @@ async def status(request: Request) -> StatusResponse:
         api_version="v1",
         schema_version=2,
         port=ctx.config.port,
+        network_host=_network_host(),
     )
+
+
+def _network_host() -> str | None:
+    try:
+        addresses = socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)
+    except OSError:
+        return None
+    for address in addresses:
+        host = address[4][0]
+        if not host.startswith("127."):
+            return host
+    return None

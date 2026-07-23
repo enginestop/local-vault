@@ -5,7 +5,7 @@ import { errorText, strengthOf } from '../utils/helpers'
 import './SignupScreen.css'
 import type { Screen } from '../types'
 
-export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: Lang; setLang: (lang: Lang) => void; t: (key: any) => string; onSuccess: (result: SessionResult) => void; onScreen: (screen: Screen) => void }) {
+export function SignupScreen({ activeHost, lang, setLang, t, onSuccess, onScreen }: { activeHost?: string; lang: Lang; setLang: (lang: Lang) => void; t: (key: any) => string; onSuccess: (result: SessionResult) => void; onScreen: (screen: Screen) => void }) {
   const [master, setMaster] = useState('')
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
@@ -57,7 +57,7 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
           LocalVault
         </div>
         <div className="signup-connection">
-          <label className="signup-language-switcher"><span className="sr-only">{t('language')}</span><select value={lang} onChange={(event) => setLang(event.target.value as Lang)} aria-label={t('language')}><option value="id">ID</option><option value="en">EN</option></select></label><Wifi size={14} /> {t('lanActive')} <span>{window.location.host}</span>
+          <label className="signup-language-switcher"><span className="sr-only">{t('language')}</span><select value={lang} onChange={(event) => setLang(event.target.value as Lang)} aria-label={t('language')}><option value="id">ID</option><option value="en">EN</option></select></label><Wifi size={14} /> {t('lanActive')} <span>{activeHost || window.location.host}</span>
         </div>
       </header>
 

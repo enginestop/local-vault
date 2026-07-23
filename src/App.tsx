@@ -43,6 +43,7 @@ export default function App() {
   useEffect(() => { document.documentElement.lang = lang }, [lang])
   const [screen, setScreen] = useState<Screen>('boot')
   const [setupRequired, setSetupRequired] = useState(false)
+  const [networkHost, setNetworkHost] = useState(() => window.location.host)
   const [view, setView] = useState<View>('vault')
   const [credentials, setCredentials] = useState<Credential[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -126,6 +127,7 @@ export default function App() {
         const status = await api.status()
         if (cancelled) return
         setSetupRequired(status.setup_required)
+        if (status.network_host) setNetworkHost(`${status.network_host}:${status.port}`)
         if (status.setup_required) { bootSettled.current = true; setToken(null); setScreen('login'); return }
         if (status.locked || !getToken()) { bootSettled.current = true; setToken(null); setScreen('login'); return }
         try { await api.current(); if (!cancelled) { bootSettled.current = true; await enterApp() } }
@@ -240,7 +242,7 @@ export default function App() {
   }
 
   if (screen !== 'app') return <>
-    <AuthScreen screen={screen} setupRequired={setupRequired} lang={lang} setLang={setLang} t={t} onSuccess={handleAuth} onScreen={setScreen} retry={() => location.reload()} />
+    <AuthScreen screen={screen} setupRequired={setupRequired} activeHost={networkHost} lang={lang} setLang={setLang} t={t} onSuccess={handleAuth} onScreen={setScreen} retry={() => location.reload()} />
     {recoveryKey && <RecoveryKeyDialog recoveryKey={recoveryKey} t={t} acknowledge={() => { setRecoveryKey(null); const action = afterRecovery.current; afterRecovery.current = null; action?.() }} />}
   </>
 
