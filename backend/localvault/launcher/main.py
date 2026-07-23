@@ -15,14 +15,11 @@ from .server import ServerWorker
 LOCK_FILENAME = "localvault.lock"
 
 
-def portable_root() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parents[2]
-
-
 def resolve_data_dir() -> str:
-    return str(portable_root() / "LocalVault-Data")
+    configured = os.environ.get("LOCALVAULT_DATA_DIR", "").strip()
+    if configured:
+        return str(Path(configured).expanduser().resolve())
+    return str(Path(__file__).resolve().parents[2] / "LocalVault-Data")
 
 
 def acquire_instance_lock(data_dir: str):

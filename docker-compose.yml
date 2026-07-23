@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: localvault
+      POSTGRES_USER: localvault
+      POSTGRES_PASSWORD: localvault
+    volumes:
+      - localvault-db:/var/lib/postgresql/data
+  app:
+    build: .
+    env_file: .env
+    depends_on:
+      - db
+    ports:
+      - "8741:8741"
+    volumes:
+      - localvault-data:/app/data
+volumes:
+  localvault-db:
+  localvault-data:

@@ -23,6 +23,8 @@ class User:
         display_name: str,
         recovery_enabled: bool,
         created_at: str,
+        role: str = "admin_user",
+        account_status: str = "active",
     ) -> None:
         self.id = id
         self.username = username
@@ -30,6 +32,8 @@ class User:
         self.display_name = display_name
         self.recovery_enabled = recovery_enabled
         self.created_at = created_at
+        self.role = role
+        self.account_status = account_status
 
 
 async def register(
@@ -44,9 +48,12 @@ async def register(
         try:
             row = await conn.fetchrow(
                 """
-                INSERT INTO users (id, username, email, master_password_hash)
-                VALUES ($1, $2, $3, $4)
-                RETURNING id, username, email, display_name, recovery_enabled, created_at
+                INSERT INTO users (id, username, email, master_password_hash, role, account_status, approved_at)
+                VALUES ($1, $2, $3, $4,
+                    CASE WHEN NOT EXISTS (SELECT 1 FROM users) THEN 'superadmin' ELSE 'admin_user' END,
+                    CASE WHEN NOT EXISTS (SELECT 1 FROM users) THEN 'active' ELSE 'pending' END,
+                    CASE WHEN NOT EXISTS (SELECT 1 FROM users) THEN now() ELSE NULL END)
+                RETURNING id, username, email, display_name, recovery_enabled, created_at, role, account_status
                 """,
                 user_id, username, email, password_hash,
             )
@@ -65,6 +72,7 @@ async def register(
         display_name=row["display_name"],
         recovery_enabled=row["recovery_enabled"],
         created_at=row["created_at"].isoformat(),
+        role=row["role"], account_status=row["account_status"],
     )
 
 
@@ -74,7 +82,7 @@ async def authenticate(login: str, master_password: str) -> User:
         row = await conn.fetchrow(
             """
             SELECT id, username, email, display_name, recovery_enabled,
-                   created_at, master_password_hash
+                   created_at, master_password_hash, role, account_status
             FROM users
             WHERE lower(username) = lower($1) OR lower(email) = lower($1)
             """,
@@ -85,6 +93,10 @@ async def authenticate(login: str, master_password: str) -> User:
             "LOGIN_FAILED", "Login failed",
             "Invalid username/email or master password", 401,
         )
+    if row["account_status"] == "pending":
+        raise errors.AccountPending()
+    if row["account_status"] == "disabled":
+        raise errors.AccountDisabled()
     try:
         _ph.verify(row["master_password_hash"], master_password)
     except (VerifyMismatchError, VerificationError, InvalidHashError):
@@ -106,6 +118,7 @@ async def authenticate(login: str, master_password: str) -> User:
         display_name=row["display_name"],
         recovery_enabled=row["recovery_enabled"],
         created_at=row["created_at"].isoformat(),
+        role=row["role"], account_status=row["account_status"],
     )
 
 
@@ -114,7 +127,7 @@ async def get_user_by_id(user_id: str) -> User | None:
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            SELECT id, username, email, display_name, recovery_enabled, created_at
+            SELECT id, username, email, display_name, recovery_enabled, created_at, role, account_status
             FROM users WHERE id = $1::uuid
             """,
             user_id,
@@ -128,6 +141,7 @@ async def get_user_by_id(user_id: str) -> User | None:
         display_name=row["display_name"],
         recovery_enabled=row["recovery_enabled"],
         created_at=row["created_at"].isoformat(),
+        role=row["role"], account_status=row["account_status"],
     )
 
 
@@ -161,7 +175,7 @@ async def update_profile(
                 f"""
                 UPDATE users SET {', '.join(sets)}, updated_at = now()
                 WHERE id = $1::uuid
-                RETURNING id, username, email, display_name, recovery_enabled, created_at
+                RETURNING id, username, email, display_name, recovery_enabled, created_at, role, account_status
                 """,
                 *params,
             )
@@ -180,6 +194,7 @@ async def update_profile(
         display_name=row["display_name"],
         recovery_enabled=row["recovery_enabled"],
         created_at=row["created_at"].isoformat(),
+        role=row["role"], account_status=row["account_status"],
     )
 
 

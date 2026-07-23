@@ -21,10 +21,8 @@ class ServerWorker(threading.Thread):
         self.bridge = bridge
         self.status: queue.Queue[tuple[str, str | None]] = queue.Queue()
         self.app = create_app(data_dir, control=bridge)
-        # A PyInstaller windowed executable has no sys.stdout/sys.stderr.
-        # Uvicorn's default console log configuration assumes both exist and
-        # fails before binding the socket, so launcher logging is configured
-        # separately to LocalVault-Data/logs/localvault.log.
+        # The local host launcher may run without standard streams, so avoid
+        # Uvicorn's console log configuration and use the application logger.
         self.server = uvicorn.Server(
             uvicorn.Config(
                 self.app,

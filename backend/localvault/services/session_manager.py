@@ -162,6 +162,13 @@ class SessionManager:
             self._tab_owners.clear()
             self._tickets.clear()
 
+    def lock_user(self, user_id: str) -> None:
+        with self._lock:
+            for session in list(self._sessions.values()):
+                if session.user_id == user_id:
+                    self._send_to_session(session, _event("vault.locked"))
+                    self._remove(session)
+
     def _remove(self, session: Session) -> None:
         self._sessions.pop(session.session_id, None)
         self._tab_owners.pop(session.tab_instance_id, None)

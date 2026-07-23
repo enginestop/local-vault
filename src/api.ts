@@ -80,6 +80,9 @@ export interface SessionResult {
   username?: string
   email?: string
   recovery_key?: string | null
+  role?: 'superadmin' | 'admin_user'
+  account_status?: 'pending' | 'active' | 'disabled'
+  message?: string | null
 }
 
 export interface UserProfile {
@@ -89,7 +92,11 @@ export interface UserProfile {
   display_name: string
   recovery_enabled: boolean
   created_at: string
+  role: 'superadmin' | 'admin_user'
+  account_status: 'pending' | 'active' | 'disabled'
 }
+
+export interface VaultInfo { id: string; name: string; kind: 'shared' | 'personal'; owner_id: string | null; revision: number; active: boolean; owned: boolean }
 
 export interface ImportPreview {
   id: string
@@ -128,6 +135,30 @@ const TAB_KEY = 'lv_tab_id'
 
 let _currentUser: { username: string; email: string } | null = null
 
+function newTabId(): string {
+  // randomUUID() is unavailable in some older browsers and on insecure HTTP
+  // contexts. getRandomValues() is broadly available in both cases.
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16)
+    crypto.getRandomValues(bytes)
+    bytes[6] = (bytes[6] & 0x0f) | 0x40
+    bytes[8] = (bytes[8] & 0x3f) | 0x80
+    const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+  }
+
+  // The tab ID is only an instance identifier, not a secret or credential.
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, char => {
+    const random = Math.floor(Math.random() * 16)
+    const value = char === 'x' ? random : (random & 0x3) | 0x8
+    return value.toString(16)
+  })
+}
+
 export function getCurrentUser() { return _currentUser }
 export function setCurrentUser(user: { username: string; email: string } | null) { _currentUser = user }
 
@@ -143,14 +174,14 @@ export function setToken(value: string | null): void {
 export function getTabId(): string {
   let value = sessionStorage.getItem(TAB_KEY)
   if (!value) {
-    value = crypto.randomUUID()
+    value = newTabId()
     sessionStorage.setItem(TAB_KEY, value)
   }
   return value
 }
 
 export function resetTabId(): string {
-  const value = crypto.randomUUID()
+  const value = newTabId()
   sessionStorage.setItem(TAB_KEY, value)
   return value
 }
@@ -320,6 +351,13 @@ export const api = {
   eventTicket: () => request<{ ticket: string }>('POST', '/api/v1/sessions/event-ticket'),
 
   getProfile: () => request<UserProfile>('GET', '/api/v1/users/me'),
+  listUsers: () => request<{ items: Array<UserProfile & { status: UserProfile['account_status'] }> }>('GET', '/api/v1/admin/users'),
+  approveUser: (id: string) => request<UserProfile>(`POST`, `/api/v1/admin/users/${id}/approve`),
+  rejectUser: (id: string) => request<{ rejected: boolean }>('POST', `/api/v1/admin/users/${id}/reject`),
+  setUserStatus: (id: string, status: 'active' | 'disabled') => request<UserProfile>('POST', `/api/v1/admin/users/${id}/status`, { body: { status } }),
+  setUserRole: (id: string, role: 'superadmin' | 'admin_user') => request<UserProfile>('PUT', `/api/v1/admin/users/${id}/role`, { body: { role } }),
+  listVaults: () => request<{ items: VaultInfo[] }>('GET', '/api/v1/vaults'),
+  createPersonalVault: (name: string, masterPassword: string) => request<VaultInfo>('POST', '/api/v1/vaults/personal', { body: { name }, headers: { 'X-Master-Password': masterPassword } }),
   updateProfile: (body: Record<string, unknown>) => request<UserProfile>('PUT', '/api/v1/users/me', { body }),
 
   listCredentials: (params: Record<string, string | number | boolean | string[]> = {}) =>

@@ -1,3 +1,0 @@
--r requirements-runtime.txt
-PyInstaller==6.21.0
-cyclonedx-bom==7.1.0

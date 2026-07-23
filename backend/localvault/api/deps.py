@@ -36,6 +36,10 @@ async def require_user(request: Request):
     user = await get_user_by_id(session.user_id)
     if user is None:
         raise errors.SessionInvalid()
+    if user.account_status == "pending":
+        raise errors.AccountPending()
+    if user.account_status == "disabled":
+        raise errors.AccountDisabled()
     return user
 
 

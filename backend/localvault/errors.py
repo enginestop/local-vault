@@ -42,6 +42,21 @@ class SessionInvalid(ProblemError):
         )
 
 
+class AccountPending(ProblemError):
+    def __init__(self) -> None:
+        super().__init__("ACCOUNT_PENDING", "Approval required", "Menunggu persetujuan Superadmin.", 403)
+
+
+class AccountDisabled(ProblemError):
+    def __init__(self) -> None:
+        super().__init__("ACCOUNT_DISABLED", "Account disabled", "Akun ini dinonaktifkan.", 403)
+
+
+class Forbidden(ProblemError):
+    def __init__(self, detail: str = "You do not have permission for this action") -> None:
+        super().__init__("FORBIDDEN", "Forbidden", detail, 403)
+
+
 class ReauthRequired(ProblemError):
     def __init__(self) -> None:
         super().__init__(

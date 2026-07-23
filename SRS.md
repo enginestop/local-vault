@@ -1,4 +1,4 @@
-# Software Requirements Specification (SRS) — LocalVault
+# Software Requirements Specification (SRS) — LocalVault Multi-user
 
 | Atribut | Nilai |
 |---|---|
@@ -14,20 +14,20 @@
 
 ### 1.1 Tujuan
 
-Dokumen ini menetapkan persyaratan produk, perilaku, data, antarmuka, keamanan, pengemasan, pengujian, dan kriteria penerimaan LocalVault. Dokumen ini bergaya IEEE dan bersifat normatif: implementer, termasuk implementer AI, harus dapat membangun v1 tanpa keputusan produk yang belum ditentukan.
+Dokumen ini menetapkan persyaratan produk, perilaku, data, antarmuka, keamanan, pengujian, dan kriteria penerimaan LocalVault. Dokumen ini bergaya IEEE dan bersifat normatif: implementer, termasuk implementer AI, harus dapat membangun v1 tanpa keputusan produk yang belum ditentukan.
 
 Kata **HARUS**, **TIDAK BOLEH**, **SEBAIKNYA**, dan **BOLEH** menunjukkan tingkat kewajiban. Jika contoh bertentangan dengan persyaratan ber-ID, persyaratan ber-ID yang berlaku.
 
 ### 1.2 Ruang lingkup produk
 
-LocalVault adalah password manager lokal dengan akun pengguna dan satu vault per pengguna. Satu proses host menyimpan envelope vault terenkripsi di PostgreSQL dan melayani banyak tab atau perangkat klien pada LAN melalui aplikasi web. Produk didistribusikan sebagai aplikasi host portable untuk Windows, macOS, dan Linux; PostgreSQL harus tersedia pada deployment host.
+LocalVault adalah password manager lokal berbasis source dengan akun pengguna dan satu vault per pengguna. Satu proses host menyimpan envelope vault terenkripsi di PostgreSQL dan melayani banyak tab atau perangkat klien pada LAN melalui aplikasi web. PostgreSQL harus tersedia pada host lokal.
 
 Nilai utama produk adalah:
 
 - menyimpan kredensial secara terenkripsi di host milik pengguna;
 - menyediakan pengelolaan, pencarian, impor, ekspor, Trash, dan backup dari browser modern;
 - menyinkronkan perubahan antarklien LAN secara langsung;
-- dapat dipindahkan atau ditingkatkan dengan mempertahankan folder data di samping launcher.
+- dapat ditingkatkan dari source dengan mempertahankan direktori data host yang dikonfigurasi.
 
 ### 1.3 Audiens
 
@@ -43,7 +43,7 @@ Dokumen ini ditujukan bagi pengembang backend, frontend, launcher/tray, keamanan
 | DEK | *Data Encryption Key*, kunci acak 256-bit untuk mengenkripsi payload vault. |
 | KEK | *Key Encryption Key*, kunci 256-bit untuk membungkus DEK. |
 | LAN | Jaringan lokal yang dapat mencapai alamat dan port host. |
-| Launcher | Executable native portable yang mengelola server dan menu tray. |
+| Launcher | Launcher native host lokal yang mengelola server dan menu tray. |
 | Mutasi | Operasi yang mengubah vault atau pengaturan yang disimpan. |
 | Payload vault | Dokumen JSON kanonik yang berisi seluruh data rahasia aplikasi. |
 | Revision | Bilangan bulat monoton untuk optimistic concurrency. |
@@ -59,8 +59,7 @@ Dokumen ini ditujukan bagi pengembang backend, frontend, launcher/tray, keamanan
 4. [MDN Clipboard API](https://developer.mozilla.org/en-US/docs/Web/API/Clipboard_API) — batas akses clipboard browser.
 5. [Google Chrome — Import or export passwords with Chrome](https://support.google.com/chrome/answer/13068232) — interoperabilitas CSV Chromium.
 6. [Mozilla Firefox — Export login data from Firefox](https://support.mozilla.org/en-US/kb/export-login-data-firefox) — interoperabilitas CSV Firefox dan sifat plaintext hasil ekspor.
-7. [PyInstaller — Using PyInstaller](https://pyinstaller.org/en/stable/usage.html) — bundling mandiri dan build terpisah pada setiap OS.
-8. [WCAG 2.2](https://www.w3.org/TR/WCAG22/) — target aksesibilitas AA.
+7. [WCAG 2.2](https://www.w3.org/TR/WCAG22/) — target aksesibilitas AA.
 
 ### 1.6 Konvensi identitas persyaratan
 
@@ -91,7 +90,7 @@ Semua persyaratan v1 pada dokumen ini berprioritas **Must** kecuali dinyatakan l
 
 ```text
 ┌──────────────────────────────────────────────────────────┐
-│ Host portable                                            │
+│ Host lokal berbasis source                              │
 │ ┌─────────────┐  lifecycle  ┌──────────────────────────┐ │
 │ │ Tray/       │─────────────▶│ FastAPI + static React  │ │
 │ │ Launcher    │              │ REST JSON + WebSocket   │ │
@@ -99,7 +98,7 @@ Semua persyaratan v1 pada dokumen ini berprioritas **Must** kecuali dinyatakan l
 │                                        │                 │
 │                             encrypted envelope only      │
 │                                        ▼                 │
-│              PostgreSQL + LocalVault-Data/{backup,config,log} │
+│       PostgreSQL + ${LOCALVAULT_DATA_DIR}/{backup,config,log} │
 └───────────────────────────────┬──────────────────────────┘
                                 │ HTTP/WS pada LAN
                  ┌──────────────┼──────────────┐
@@ -112,7 +111,7 @@ Browser hanya berkomunikasi dengan origin LocalVault. Tidak ada font, script, st
 
 ### 2.2 Profil pengguna
 
-Produk memiliki tepat satu identitas pemilik berbasis master password dan tidak memiliki akun, role, izin per-item, atau sharing. Pemilik diasumsikan mampu menjalankan aplikasi portable, membuka alamat LAN, dan memahami peringatan bahwa CSV hasil ekspor tidak terenkripsi.
+Produk memiliki tepat satu identitas pemilik berbasis master password dan tidak memiliki akun, role, izin per-item, atau sharing. Pemilik diasumsikan mampu menjalankan host lokal dari source, membuka alamat LAN, dan memahami peringatan bahwa CSV hasil ekspor tidak terenkripsi.
 
 ### 2.3 Lingkungan operasi
 
@@ -150,14 +149,14 @@ Multi-user, role, sharing, cloud sync, browser extension, autofill, HTTPS, TOTP,
 |---|---|
 | PRD-001 | Backend HARUS menggunakan Python dan FastAPI; penyimpanan HARUS menggunakan PostgreSQL melalui asyncpg; frontend HARUS menggunakan React dan TypeScript; antarmuka aplikasi HARUS REST JSON dan WebSocket. |
 | PRD-002 | Build frontend teroptimasi HARUS dibundel sebagai aset backend dan dilayani dari origin serta port yang sama. |
-| PRD-003 | Tidak boleh ada ketergantungan runtime pada CDN, koneksi internet, instalasi Python, instalasi Node.js, atau package manager. PostgreSQL adalah dependency runtime resmi dan dikonfigurasi melalui `DATABASE_URL`. |
-| PRD-004 | Release HARUS menghasilkan artefak portable terpisah untuk Windows, macOS, dan Linux dari runner OS yang sama dengan target. |
+| PRD-003 | Host lokal berbasis source HARUS menggunakan dependency yang dikunci pada file requirements dan `package-lock.json`; tidak boleh ada ketergantungan pada CDN atau koneksi internet saat runtime. PostgreSQL adalah dependency runtime resmi dan dikonfigurasi melalui `DATABASE_URL`. |
+| PRD-004 | Dokumentasi release TIDAK BOLEH menjanjikan artefak executable mandiri atau kompatibilitas lintas OS; source dan prosedur build/test per host harus menjadi acuan. |
 | PRD-005 | Launcher HARUS menjalankan satu instance server, menampilkan tray menu, membuka browser default, dan menghentikan server secara tertib. |
 | PRD-006 | Server HARUS bind pada `0.0.0.0` menggunakan HTTP IPv4 dengan port persisten. Port awal v1 HARUS `8741`, disimpan di `config.json`, dan tidak boleh berpindah otomatis jika port sedang dipakai. |
 | PRD-007 | Kegagalan bind HARUS menghentikan startup, menampilkan pesan yang menyebut port, dan menawarkan aksi membuka lokasi log; aplikasi TIDAK BOLEH memilih port acak. |
-| PRD-008 | Data HARUS berada dalam direktori `LocalVault-Data` di samping launcher, bukan di profile global OS. |
+| PRD-008 | Data HARUS berada pada direktori host yang ditentukan `LOCALVAULT_DATA_DIR`; default source adalah `backend/LocalVault-Data`. Direktori ini bukan profile global OS. |
 | PRD-009 | Startup HARUS ditolak sebelum server bind jika direktori data atau subdirektori wajib tidak dapat dibuat, dibaca, dan ditulis. Tes writability HARUS membuat, flush, rename atomik, lalu menghapus file probe tanpa menyentuh vault. |
-| PRD-010 | Mengganti artefak aplikasi untuk upgrade TIDAK BOLEH menghapus, memindahkan, atau menimpa `LocalVault-Data`. |
+| PRD-010 | Memperbarui source aplikasi TIDAK BOLEH menghapus, memindahkan, atau menimpa direktori data yang dikonfigurasi. |
 | PRD-011 | Hanya satu proses LocalVault BOLEH membuka satu direktori data. Instance kedua HARUS berhenti dengan pesan bahwa aplikasi sudah berjalan. |
 | PRD-012 | UI HARUS dapat diakses melalui `http://127.0.0.1:8741` dan setiap alamat IPv4 LAN aktif host pada port terkonfigurasi. |
 | PRD-013 | Data directory HARUS berada pada filesystem yang mendukung exclusive file lock, flush durability, dan atomic rename dalam direktori yang sama. Startup self-test HARUS menolak lokasi yang tidak menyediakan semantik tersebut; network share yang tidak dapat membuktikannya tidak didukung. |
@@ -165,9 +164,9 @@ Multi-user, role, sharing, cloud sync, browser extension, autofill, HTTPS, TOTP,
 Struktur direktori normatif:
 
 ```text
-<folder-portable>/
-├── LocalVault[.exe atau launcher platform]
-└── LocalVault-Data/
+<repository-source>/backend/
+├── run.py
+└── LocalVault-Data/  (atau path `LOCALVAULT_DATA_DIR`)
     ├── config.json
     ├── backups/
     ├── logs/
@@ -309,7 +308,7 @@ Deteksi delimiter mem-parsing 20 logical record pertama dengan masing-masing kan
 | BAK-003 | Retensi HARUS menyimpan 10 snapshot versi terbaru tanpa membedakan kind dan satu snapshot `daily` untuk masing-masing dari 30 tanggal UTC terbaru yang memiliki snapshot harian. Snapshot yang memenuhi salah satu bucket tidak boleh dihapus. |
 | BAK-004 | Server HARUS membuat tepat satu snapshot `daily` per tanggal UTC ketika aplikasi berjalan: pada startup/first mutation tanggal itu atau scheduler sesudah `00:05Z`. Snapshot boleh memiliki revision yang sama dengan hari sebelumnya dan dipertahankan selama 30 tanggal UTC terbaru. Kegagalan memicu tray warning dan retry setiap jam sampai berhasil. |
 | BAK-005 | Backup HARUS menyimpan envelope terenkripsi, metadata non-rahasia yang dibutuhkan untuk restore, dan manifest ber-checksum; tidak boleh menyimpan plaintext payload, password, atau key tak terbungkus. |
-| BAK-006 | Backup otomatis disimpan di `LocalVault-Data/backups` dengan nama `lv-<vault-id>-r<revision>-<timestamp>-<kind>.lvbak`. Penulisan memakai file sementara terenkripsi dalam folder yang sama, `fsync`, atomic rename, lalu pembaruan index. |
+| BAK-006 | Backup otomatis disimpan di `${LOCALVAULT_DATA_DIR}/backups` dengan nama `lv-<vault-id>-r<revision>-<timestamp>-<kind>.lvbak`. Penulisan memakai file sementara terenkripsi dalam folder yang sama, `fsync`, atomic rename, lalu pembaruan index. |
 | BAK-007 | Pengguna HARUS dapat membuat backup manual dan langsung mengunduh `.lvbak`. Backup manual memakai envelope revision saat ini, tidak plaintext, disimpan di folder backup, dan ikut bucket 10 snapshot versi terbaru pada BAK-003. |
 | BAK-008 | Pengguna HARUS dapat memilih backup lokal terindeks atau mengunggah `.lvbak` untuk restore. Restore memvalidasi format, vault/schema compatibility, checksum, autentikasi AEAD, dan kemampuan membuka payload sebelum mengubah vault aktif. Untuk backup dengan vault ID/DEK yang sama, server HARUS memakai DEK sesi aktif tanpa reautentikasi; bila DEK aktif tidak dapat membuka kandidat, UI meminta master/recovery yang valid saat snapshot dibuat semata-mata sebagai material dekripsi backup. |
 | BAK-009 | Sebelum restore, schema migration, reset vault, dan bulk destructive action, snapshot `pre-operation` tervalidasi HARUS dibuat. Kegagalan snapshot membatalkan operasi. |
@@ -318,7 +317,7 @@ Deteksi delimiter mem-parsing 20 logical record pertama dengan masing-masing kan
 | BAK-012 | Restore versi schema lebih baru daripada aplikasi HARUS ditolak. Restore versi lebih lama HARUS menjalani migrasi bertahap pada kandidat setelah pre-operation snapshot. |
 | BAK-013 | Reset vault HARUS meminta sesi unlocked, master password saat ini, frasa konfirmasi `RESET LOCALVAULT`, master password baru, serta pilihan recovery. Reset membuat vault ID/DEK baru dan recovery baru bila dipilih, lalu vault kosong tanpa membuka kembali endpoint setup. |
 | BAK-014 | Penggantian master password HARUS membungkus ulang DEK yang sama, bukan mengenkripsi ulang payload. Operasi meminta master lama dan master baru, strength warning yang dapat diabaikan, serta snapshot pre-operation. Backup historis bersifat immutable: saat vault aktif masih unlocked, DEK aktif dapat membuka backup satu-vault; untuk disaster restore tanpa vault aktif, backup dapat memerlukan master/recovery yang valid ketika dibuat. UI harus memperingatkan hal ini sebelum pergantian/rotasi dan key lama tidak dapat dicabut dari salinan backup lama yang telah diekspor. |
-| BAK-015 | Upgrade aplikasi dilakukan manual dengan menghentikan aplikasi, mengganti artefak launcher/aplikasi, dan menjalankannya kembali. Migrasi schema tidak boleh dimulai sebelum snapshot dan harus dapat rollback atomik. |
+| BAK-015 | Upgrade aplikasi dilakukan manual dengan menghentikan aplikasi, memperbarui source, dan menjalankannya kembali. Migrasi schema tidak boleh dimulai sebelum snapshot dan harus dapat rollback atomik. |
 
 ## 7. Persyaratan keamanan dan kriptografi
 
@@ -700,7 +699,7 @@ List Credential HARUS mengembalikan field yang diperlukan tabel tetapi boleh men
 
 | Komponen | Tanggung jawab |
 |---|---|
-| Portable Launcher/Tray | OS lock, lifecycle server, port/config, alamat LAN, autostart, lock-all, buka browser, shutdown. |
+| Local Host Launcher/Tray | OS lock, lifecycle server, port/config, alamat LAN, autostart, lock-all, buka browser, shutdown. |
 | FastAPI Presentation | REST validation, auth middleware, security headers, static SPA, WebSocket ticket/connection. |
 | Session Manager | Token digest in-memory, kepemilikan tab, reconnect grace, lock satu/semua, best-effort clearing. |
 | Vault Application Service | Use case, permission state, optimistic concurrency, validation, transaksi dan revision. |
@@ -762,10 +761,9 @@ Jika proses gagal sebelum commit PostgreSQL, state N tetap otoritatif dan backup
 
 ### 12.6 Dependency dan build policy
 
-- Versi Python, Node.js build-time, FastAPI, React, TypeScript, asyncpg, PostgreSQL client, Argon2, crypto, CSV parser, tray toolkit, dan PyInstaller HARUS dipin tepat di lockfile release.
-- Software bill of materials dan checksum SHA-256 HARUS dihasilkan per artefak.
-- Frontend dibangun lebih dahulu; output hashed asset disalin ke resource backend; PyInstaller kemudian membundel backend, launcher, library native, dan aset.
-- Pipeline terpisah menjalankan build/test di Windows, macOS, dan Linux. Cross-compilation PyInstaller tidak diterima sebagai bukti kompatibilitas.
+- Versi Python, Node.js, FastAPI, React, TypeScript, asyncpg, PostgreSQL client, Argon2, crypto, CSV parser, dan tray toolkit HARUS dipin pada file dependency yang sesuai.
+- Frontend dibangun lebih dahulu; output hashed asset disalin ke resource backend untuk dijalankan oleh host lokal.
+- Build dan test source dijalankan pada setiap OS host yang didukung; hasil satu OS tidak boleh dipresentasikan sebagai bukti kompatibilitas OS lain.
 
 ## 13. Persyaratan kualitas
 
@@ -788,8 +786,8 @@ Perangkat referensi minimum adalah host 64-bit dengan 4 logical CPU ≥2,0 GHz, 
 |---|---|
 | QUA-007 | Release HARUS lulus smoke dan regression suite pada dua versi stabil terbaru Chrome, Edge, Firefox, serta Safari stabil terbaru saat release. Versi exact dicatat di release matrix. |
 | QUA-008 | Release HARUS diuji pada viewport 360×800, 768×1024, dan 1440×900 dengan zoom 100% dan 200%, tanpa horizontal overflow halaman atau control yang tidak dapat dijangkau. |
-| QUA-009 | Paket Windows, macOS, dan Linux HARUS diuji di mesin bersih tanpa Python/Node, termasuk launch, setup, restart, LAN access, tray, autostart, upgrade, dan restore. |
-| QUA-010 | Data yang dibuat oleh satu versi schema pada OS mana pun HARUS dapat dipindahkan bersama folder portable dan dibuka pada build OS lain dengan versi aplikasi/schema kompatibel. |
+| QUA-009 | Host source Windows, macOS, dan Linux HARUS diuji dengan dependency yang dikunci, termasuk launch, setup, restart, LAN access, tray, autostart, upgrade, dan restore. |
+| QUA-010 | Data PostgreSQL dan direktori data yang dibuat oleh satu versi schema HARUS tetap dapat dibuka setelah upgrade source dengan versi aplikasi/schema kompatibel. |
 
 ### 13.3 Aksesibilitas
 
@@ -1012,9 +1010,9 @@ Fixture wajib disimpan di test suite dan tidak berisi credential nyata:
 | AT-BAK-04 | Suntik disk-full/permission/I/O failure pada setiap write, flush, rename, index, dan PostgreSQL commit | Sebelum commit menghasilkan revision lama dan error terarah; tidak ada response sukses tanpa backup wajib; orphan aman dibersihkan; tidak ada state campuran. |
 | AT-BAK-05 | Kill proses pada setiap checkpoint mutation dan restore | Startup recovery memilih tepat state lengkap lama/baru dan integrity/AEAD check lulus, memenuhi QUA-015. |
 | AT-BAK-06 | Jalankan schema migration dari setiap versi yang didukung dan paksa gagal tiap langkah | Snapshot pre-migration dibuat; sukses menghasilkan schema/data golden; gagal rollback ke versi lama yang dapat dibuka. |
-| AT-BAK-07 | Ganti executable aplikasi dengan build baru sementara data folder tetap | Seluruh data, backup, config, dan recovery ability tetap utuh; aplikasi tidak menimpa data selain migrasi terkontrol. |
+| AT-BAK-07 | Perbarui source aplikasi sementara direktori data tetap | Seluruh data, backup, config, dan recovery ability tetap utuh; aplikasi tidak menimpa data selain migrasi terkontrol. |
 
-### 15.7 UI, kompatibilitas, packaging, dan performa
+### 15.7 UI, kompatibilitas, host, dan performa
 
 | ID | Given / When | Then / kriteria lulus |
 |---|---|---|
@@ -1023,8 +1021,8 @@ Fixture wajib disimpan di test suite dan tidak berisi credential nyata:
 | AT-UI-03 | Audit contrast dan target size | Seluruh warna/state light/dark memenuhi QUA-011–014 termasuk focus visible dan reduced motion. |
 | AT-UI-04 | Ubah `id↔en` di setiap layar dan jalankan missing-key test | Semua teks berubah tanpa reload, default Indonesia, timestamp locale benar, tidak ada key mentah atau layout terpotong tanpa akses full text. |
 | AT-UI-05 | Test matrix browser versi exact | Dua stable terbaru Chrome/Edge/Firefox dan Safari terbaru lulus CRUD, copy native/fallback/manual, WebSocket, download/upload, responsive, dan keyboard suite. |
-| AT-PKG-01 | Mesin/VM bersih tiap OS tanpa Python/Node | Portable app start ≤target, setup, tray semua menu dalam id/en, LAN access, autostart user-level, stop/restart, dan data directory behavior lulus. |
-| AT-PKG-02 | Port dipakai, data read-only, filesystem tanpa lock/atomic rename, instance kedua, config/vault korup | Startup menolak aman dengan error/log action dan tidak membuat port/data/vault pengganti. |
+| AT-HOST-01 | Host source tiap OS dengan dependency yang dikunci | Aplikasi host lokal start ≤target, setup, tray semua menu dalam id/en, LAN access, autostart user-level, stop/restart, dan data directory behavior lulus. |
+| AT-HOST-02 | Port dipakai, data read-only, filesystem tanpa lock/atomic rename, instance kedua, config/vault korup | Startup menolak aman dengan error/log action dan tidak membuat port/data/vault pengganti. |
 | AT-PERF-01 | Dataset/perangkat referensi dan 100 runs | p95 search/filter/sort <200 ms, mutation <500 ms, p99 broadcast <1 s, unlock ≤5 s, memory <512 MiB, tanpa main-thread freeze >200 ms. |
 | AT-PERF-02 | 20 cold launches per OS | Setiap endpoint ready + shell interaktif ≤5 detik; report mencatat median/p95/max. |
 | AT-NET-01 | Jalankan seluruh workflow di network sandbox dengan DNS/egress monitor | Nol DNS atau koneksi keluar. Hanya socket listen/incoming LAN; klik URL eksplisit menghasilkan navigasi browser yang teridentifikasi sebagai aksi pengguna. |
@@ -1033,8 +1031,8 @@ Fixture wajib disimpan di test suite dan tidak berisi credential nyata:
 
 | Requirement | Sumber tujuan/use case | Komponen utama | Acceptance test |
 |---|---|---|---|
-| PRD-001–004 | Scope, 2.3, UC-12 | Build pipeline, FastAPI, React SPA | AT-PKG-01, AT-UI-05 |
-| PRD-005–013 | UC-12 | Launcher, startup, repository | AT-PKG-01–02, AT-BAK-07 |
+| PRD-001–004 | Scope, 2.3, UC-12 | Build pipeline, FastAPI, React SPA | AT-HOST-01, AT-UI-05 |
+| PRD-005–013 | UC-12 | Launcher, startup, repository | AT-HOST-01–02, AT-BAK-07 |
 | SET-001–009 | UC-01 | Setup API, crypto, SPA | AT-SEC-01–02 |
 | SES-001–013 | UC-02, UC-06, UC-08, UC-11 | Session Manager, auth middleware | AT-SES-01–06, AT-CSV-06 |
 | CRD-001–008 | UC-03, UC-04 | Vault Service, React SPA | AT-CRUD-01–02 |
@@ -1057,9 +1055,9 @@ Fixture wajib disimpan di test suite dan tidak berisi credential nyata:
 | API-009–016 | UC-02, UC-06 | Session Manager, Event Broker | AT-SES-01–06, AT-PERF-01 |
 | UIX-001–018 | UC-01–12 | React SPA | AT-UI-01–03, AT-UI-05 |
 | I18N-001–006 | Seluruh UI | i18n bundle, formatter | AT-UI-04 |
-| OPS-001–013 | UC-12 | Launcher/Tray, logging | AT-PKG-01–02, AT-SEC-08–09, AT-UI-04 |
+| OPS-001–013 | UC-12 | Launcher/Tray, logging | AT-HOST-01–02, AT-SEC-08–09, AT-UI-04 |
 | QUA-001–006 | Performance goals | Semua runtime component | AT-PERF-01–02 |
-| QUA-007–010 | Compatibility goals | Browser/build pipeline | AT-UI-05, AT-PKG-01, AT-BAK-07 |
+| QUA-007–010 | Compatibility goals | Browser/build pipeline | AT-UI-05, AT-HOST-01, AT-BAK-07 |
 | QUA-011–014 | Accessibility goals | React SPA/design tokens | AT-UI-02–03 |
 | QUA-015–018 | Reliability/privacy goals | Repository, build, network policy | AT-BAK-04–05, AT-NET-01, AT-SEC-08–09 |
 
@@ -1074,7 +1072,7 @@ Catatan: baris “Model 8.2–8.10” menunjuk schema entity normatif, sedangkan
 | HTTP LAN bukan secure context yang dapat diandalkan; localhost pengecualian khusus | 2.5, SEC-030, CRD-007 | MDN Secure Contexts. |
 | Clipboard API dapat dibatasi secure context/permission | CRD-006–007, AT-UI-05 | MDN Clipboard API. |
 | Browser CSV adalah plaintext dan format diuji fixture | IMP-008–010, EXP-006–007 | Dokumentasi Chrome dan Firefox pada 1.5. |
-| Paket mandiri dan build per target OS | PRD-003–004, 12.6 | Dokumentasi PyInstaller pada 1.5. |
+| Host source dan build/test per OS | PRD-003–004, 12.6 | Dokumentasi setup dan build source pada 1.5. |
 | Aksesibilitas AA | QUA-011–014 | WCAG 2.2. |
 
 ## 17. Risiko dan mitigasi residual
@@ -1088,10 +1086,10 @@ Catatan: baris “Model 8.2–8.10” menunjuk schema entity normatif, sedangkan
 | Master hilang tanpa recovery | Sedang/Kritis | Warning eksplisit dan backup terenkripsi | Data tidak dapat dipulihkan; diterima oleh pengguna. |
 | Clipboard menyimpan secret | Tinggi/Sedang | Toast/peringatan setiap copy, manual-copy fallback | Tidak ada auto-clear pada v1. |
 | Keterbatasan zeroization Python/JS/OS swap | Sedang/Tinggi | Buffer mutable dan cleanup best-effort, threat model jujur | Salinan memori residual mungkin ada. |
-| Korupsi/power loss portable filesystem | Sedang/Tinggi | Self-test filesystem, transaction, fsync, atomic rename, snapshot, fault test | Kerusakan media fisik tetap mungkin; pengguna perlu backup eksternal manual. |
+| Korupsi/power loss host filesystem | Sedang/Tinggi | Self-test filesystem, transaction, fsync, atomic rename, snapshot, fault test | Kerusakan media fisik tetap mungkin; pengguna perlu backup eksternal manual. |
 | Backup setiap mutasi memperlambat operasi/menambah write | Sedang/Sedang | Retensi union, staging terenkripsi, target p95, storage error eksplisit | Workload besar dapat melampaui target 1.000 item. |
 | Variasi CSV browser berubah | Tinggi/Sedang | Fixture versi exact, parser toleran kolom ekstra, release matrix | Versi browser mendatang mungkin memerlukan update preset. |
-| Perbedaan native packaging/tray/autostart | Sedang/Tinggi | Build dan clean-machine test per OS | Distribusi Linux di luar release matrix tidak dijamin. |
+| Perbedaan native host/tray/autostart | Sedang/Tinggi | Build dan test source per OS | Distribusi Linux di luar release matrix tidak dijamin. |
 | Tab close tidak dapat diberitahukan secara pasti | Tinggi/Sedang | WebSocket ownership dan grace 10 detik | Token dapat hidup hingga 10 detik setelah tab tertutup. |
 | Tabrakan nonce GCM acak | Sangat rendah/Kritis | CSPRNG 96-bit, reject nonce aktif, test uniqueness, key rotation saat reset | Probabilitas nonnol diterima dan dipantau; tidak memakai nonce dari clock. |
 

@@ -27,6 +27,8 @@ class UserProfileResponse(BaseModel):
     display_name: str
     recovery_enabled: bool
     created_at: str
+    role: str
+    account_status: str
 
 
 @router.get("/users/me")
@@ -39,6 +41,8 @@ async def get_profile(request: Request) -> UserProfileResponse:
         display_name=user.display_name,
         recovery_enabled=user.recovery_enabled,
         created_at=user.created_at,
+        role=user.role,
+        account_status=user.account_status,
     )
 
 
@@ -58,6 +62,8 @@ async def update_profile(request: Request, body: UpdateProfileRequest) -> UserPr
         display_name=updated.display_name,
         recovery_enabled=updated.recovery_enabled,
         created_at=updated.created_at,
+        role=updated.role,
+        account_status=updated.account_status,
     )
 
 

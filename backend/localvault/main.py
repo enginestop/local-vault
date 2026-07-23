@@ -30,6 +30,7 @@ from .api import (
     routes_settings,
     routes_trash,
     routes_events,
+    routes_multitenant,
 )
 
 logger = make_logger("localvault.api", "INFO")
@@ -204,6 +205,7 @@ def create_app(data_dir: str, control=None) -> FastAPI:
     app.include_router(routes_settings.router, prefix=v1)
     app.include_router(routes_trash.router, prefix=v1)
     app.include_router(routes_events.router)
+    app.include_router(routes_multitenant.router, prefix=v1)
 
     static_dir = os.path.join(os.path.dirname(__file__), "static")
     if os.path.isdir(static_dir):

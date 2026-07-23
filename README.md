@@ -1,8 +1,8 @@
 # LocalVault
 
-LocalVault adalah password manager untuk satu pemilik. Satu proses pada komputer
-host menyimpan vault terenkripsi di PostgreSQL dan menyajikan antarmuka web ke
-browser di komputer yang sama atau perangkat lain pada LAN.
+LocalVault adalah password manager multi-user untuk LAN/private. Satu proses pada
+komputer host menyimpan vault terenkripsi di PostgreSQL dan menyajikan antarmuka
+web ke browser pada jaringan tepercaya.
 
 > **Status validasi lokal (23 Juli 2026):** `npm test` (7 test) dan
 > `npm run build` lulus. Test backend tidak tersedia pada workspace saat ini,
@@ -12,7 +12,11 @@ browser di komputer yang sama atau perangkat lain pada LAN.
 
 ## Fitur utama
 
-- akun pengguna dengan vault terenkripsi per pengguna, master password, dan recovery key opsional;
+- dua role saja: `Superadmin` dan `Admin/User`; user pertama otomatis Superadmin,
+  pendaftaran berikutnya menunggu approval;
+- shared vault untuk semua akun aktif dan personal vault yang terisolasi per pemilik;
+- akun pengguna dengan master password, recovery key opsional, dan status
+  `pending`, `active`, atau `disabled`;
 - AES-256-GCM untuk payload vault dan Argon2id untuk penurunan kunci;
 - credential, kategori, tag, favorite, custom field Text/Secret, dan password
   history;
@@ -208,5 +212,17 @@ localVault/
   recovery, dan upgrade aman.
 
 ## Lisensi
+
+## Multi-user dan deployment
+
+Panel **Administrasi** hanya tersedia untuk Superadmin. Gunakan panel ini untuk
+approval pendaftaran, status akun, role, dan membership vault. User pertama
+otomatis menjadi Superadmin; pendaftaran berikutnya berstatus `pending`.
+
+Untuk development, reset database secara eksplisit dan jangan migrasikan user
+lama tanpa backup. Docker tersedia melalui `docker compose up --build` dengan
+`.env` berdasarkan `.env.example`. Pada VPS/cloud, gunakan reverse proxy HTTPS,
+batasi trusted hosts/CORS, dan jangan mengekspos port HTTP langsung ke internet.
+Akses publik wajib menggunakan HTTPS.
 
 LocalVault tersedia di bawah [MIT License](LICENSE).

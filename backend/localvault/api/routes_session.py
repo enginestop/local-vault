@@ -6,6 +6,7 @@ from .. import errors
 from ..api.deps import get_session, require_session
 from ..services.session_manager import SessionManager
 from ..services.auth_service import register as auth_register, authenticate, get_user_by_id
+from ..services.multitenant_service import ensure_user_vaults
 from ..domain.password_policy import validate_master_password, PasswordPolicyError
 
 router = APIRouter()
@@ -36,22 +37,20 @@ class LoginRequest(RequestModel):
 
 
 class SessionResult(BaseModel):
-    token: str
-    session_id: str
+    token: str = ""
+    session_id: str = ""
     user_id: str
     username: str
     email: str
     recovery_key: str | None = None
+    role: str = "admin_user"
+    account_status: str = "active"
+    message: str | None = None
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(request: Request, body: RegisterRequest) -> SessionResult:
     ctx: AppContext = request.app.state.ctx
-    from ..database.pool import get_pool
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        if await conn.fetchval("SELECT count(*) FROM users"):
-            raise errors.SetupAlreadyCompleted()
     username = body.username.strip()
     email = body.email.strip().lower()
     if not username:
@@ -73,12 +72,15 @@ async def register(request: Request, body: RegisterRequest) -> SessionResult:
         email=email,
         master_password=body.master_password,
     )
+    if user.account_status == "pending":
+        return SessionResult(user_id=str(user.id), username=user.username, email=user.email, role=user.role, account_status=user.account_status, message="Menunggu persetujuan Superadmin.")
     vault = await ctx.vault.setup(
         user.id,
         body.master_password,
         body.create_recovery_key,
         body.language if body.language in {"id", "en"} else "id",
     )
+    await ensure_user_vaults(user.id, body.master_password, body.language)
     sm: SessionManager = ctx.sessions
     token = _new_token()
     session = sm.create_session(token, body.tab_instance_id, body.client_label, user.id)
@@ -89,6 +91,7 @@ async def register(request: Request, body: RegisterRequest) -> SessionResult:
         username=user.username,
         email=user.email,
         recovery_key=vault.get("recovery_key"),
+        role=user.role, account_status=user.account_status,
     )
 
 
@@ -137,6 +140,7 @@ async def login(request: Request, body: LoginRequest) -> SessionResult:
     ctx: AppContext = request.app.state.ctx
     user = await authenticate(body.login, body.master_password)
     await ctx.vault.unlock(user.id, body.master_password)
+    await ensure_user_vaults(user.id, body.master_password)
     sm: SessionManager = ctx.sessions
     token = _new_token()
     session = sm.create_session(token, body.tab_instance_id, body.client_label, user.id)
@@ -146,6 +150,7 @@ async def login(request: Request, body: LoginRequest) -> SessionResult:
         user_id=str(user.id),
         username=user.username,
         email=user.email,
+        role=user.role, account_status=user.account_status,
     )
 
 
@@ -202,6 +207,8 @@ class CurrentSessionResponse(BaseModel):
     username: str
     email: str
     client_label: str
+    role: str
+    account_status: str
 
 
 @router.get("/sessions/current")
@@ -214,12 +221,17 @@ async def current(request: Request) -> CurrentSessionResponse:
     user = await get_user_by_id(session.user_id)
     if user is None:
         raise errors.SessionInvalid()
+    if user.account_status == "pending":
+        raise errors.AccountPending()
+    if user.account_status == "disabled":
+        raise errors.AccountDisabled()
     return CurrentSessionResponse(
         session_id=session.session_id,
         user_id=str(user.id),
         username=user.username,
         email=user.email,
         client_label=session.client_label,
+        role=user.role, account_status=user.account_status,
     )
 
 

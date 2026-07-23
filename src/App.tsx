@@ -19,6 +19,7 @@ import {
   ApiError, api, getToken, resetTabId, saveBlob, setToken, websocketUrl,
   type BackupItem, type Category, type Credential, type ImportPreview,
   type Lang, type SecurityStatus, type SessionResult, type VaultSettings,
+  type UserProfile, type VaultInfo,
 } from './api'
 import { useI18n } from './i18n'
 
@@ -36,6 +37,7 @@ import { ImportDialog } from './components/ImportDialog'
 import { BackupView } from './views/BackupView'
 import { SettingsView } from './views/SettingsView'
 import { HelpDialog } from './components/HelpDialog'
+import { AdminView } from './views/AdminView'
 
 export default function App() {
   const [lang, setLang] = useState<Lang>((localStorage.getItem('lv_lang') as Lang) || 'id')
@@ -66,6 +68,9 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [backups, setBackups] = useState<BackupItem[]>([])
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null)
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [vaults, setVaults] = useState<VaultInfo[]>([])
+  const [adminOpen, setAdminOpen] = useState(false)
   const afterRecovery = useRef<(() => void) | null>(null)
   const toastTimer = useRef<number | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -116,7 +121,7 @@ export default function App() {
 
   const enterApp = useCallback(async () => {
     setScreen('app')
-    try { await loadAll() } catch (error) { announce(errorText(error)) }
+    try { const [currentProfile, availableVaults] = await Promise.all([api.getProfile(), api.listVaults()]); setProfile(currentProfile); setVaults(availableVaults.items); await loadAll() } catch (error) { announce(errorText(error)) }
   }, [announce, loadAll])
 
   useEffect(() => {
@@ -221,6 +226,7 @@ export default function App() {
   }, [screen])
 
   function handleAuth(result: SessionResult): void {
+    if (!result.token) { setScreen('login'); announce(result.message || 'Menunggu persetujuan Superadmin'); return }
     setToken(result.token)
     if (result.recovery_key) {
       afterRecovery.current = () => void enterApp()
@@ -254,6 +260,7 @@ export default function App() {
   return <div className="app-shell">
     <aside className={`sidebar ${mobileNav ? 'open' : ''}`} aria-hidden={isMobile && !mobileNav ? true : undefined} inert={isMobile && !mobileNav ? true : undefined}>
       <div className="brand"><span className="brand-mark"><LockKeyhole size={20} /></span><span>{t('appName')}</span></div>
+      <label className="select-control vault-switcher"><Vault size={15} /><select aria-label="Pilih vault" defaultValue={vaults[0]?.id || ''} onChange={() => announce('Vault dipilih')}><option value="">Pilih vault</option>{vaults.map(vault => <option key={vault.id} value={vault.id}>{vault.kind === 'shared' ? 'Shared Vault' : vault.name}</option>)}</select></label>
       <button className="new-button" onClick={() => setModal({ kind: 'credential', credential: null, generator: false })}><Plus size={18} /> {t('newCredential')} <kbd>⌘N</kbd></button>
       <nav aria-label={t('mainNavigation')}>
         <p className="nav-label">VAULT</p>
@@ -264,6 +271,7 @@ export default function App() {
         {categories.map((category) => <button className="nav-item category-item" key={category.id} onClick={() => { navigate('vault'); setCategoryFilter(category.id) }}><i style={{ background: colorFor(category.id) }} /><span>{category.name}</span></button>)}
       </nav>
       <div className="sidebar-footer">
+        {profile?.role === 'superadmin' && <button className="nav-item" onClick={() => setAdminOpen(true)}><ShieldCheck size={18} /><span>Administrasi</span></button>}
         <button className={`nav-item ${view === 'backup' ? 'active' : ''}`} onClick={() => navigate('backup')}><DatabaseBackup size={18} /><span>{t('backup')}</span></button>
         <button className={`nav-item ${view === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}><Settings size={18} /><span>{t('settings')}</span></button>
         <button className="nav-item mobile-help" onClick={() => setModal({ kind: 'help' })}><CircleHelp size={18} /><span>{t('help')}</span></button>
@@ -280,7 +288,7 @@ export default function App() {
         <div className="top-actions"><label className="language-switcher"><span className="sr-only">{t('language')}</span><select value={lang} onChange={(event) => { const next = event.target.value as Lang; setLang(next); localStorage.setItem('lv_lang', next) }} aria-label={t('language')}><option value="id">ID</option><option value="en">EN</option></select></label><span className="connection"><Wifi size={15} /> {t('connected')}</span><IconButton label={t('help')} onClick={() => setModal({ kind: 'help' })}><CircleHelp size={18} /></IconButton><button className="lock-button" disabled={busy} onClick={() => void lock()}><LockKeyhole size={16} /><span>{t('lock')}</span></button></div>
       </header>
 
-      {view === 'backup'
+      {adminOpen ? <AdminView announce={announce} close={() => setAdminOpen(false)} /> : view === 'backup'
         ? <BackupView backups={backups} setBackups={setBackups} announce={announce} t={t} onRestored={() => { setToken(null); setScreen('login') }} />
         : view === 'settings'
           ? <SettingsView lang={lang} settings={settings} categories={categories} tags={tags} vaultRevision={vaultRevision} t={t} announce={announce} reload={reload} setLang={setLang} showRecovery={(key, after) => { afterRecovery.current = after ?? null; setRecoveryKey(key) }} navigateBackup={() => navigate('backup')} />

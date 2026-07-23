@@ -1,1 +1,1 @@
-"""Native portable launcher for LocalVault."""
+"""Native local-host launcher for LocalVault."""

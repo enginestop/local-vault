@@ -16,6 +16,50 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'admin_user';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS account_status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS approved_by UUID REFERENCES users(id);
+DO $$ BEGIN
+    ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('superadmin', 'admin_user'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE users ADD CONSTRAINT users_status_check CHECK (account_status IN ('pending', 'active', 'disabled'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS vaults (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('shared', 'personal')),
+    owner_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    dek_ciphertext BYTEA,
+    dek_nonce BYTEA,
+    revision INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK ((kind = 'shared' AND owner_id IS NULL) OR (kind = 'personal' AND owner_id IS NOT NULL))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vaults_shared ON vaults(kind) WHERE kind = 'shared';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vaults_personal_owner ON vaults(owner_id) WHERE kind = 'personal';
+
+CREATE TABLE IF NOT EXISTS vault_members (
+    vault_id UUID NOT NULL REFERENCES vaults(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (vault_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS vault_key_wrappings (
+    vault_id UUID NOT NULL REFERENCES vaults(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kek_salt BYTEA NOT NULL,
+    wrapped_dek BYTEA NOT NULL,
+    wrap_nonce BYTEA NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (vault_id, user_id)
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(lower(username));
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(lower(email));
 
@@ -64,8 +108,8 @@ CREATE TABLE IF NOT EXISTS backup_index (
 CREATE INDEX IF NOT EXISTS idx_backup_index_user_id ON backup_index(user_id);
 
 INSERT INTO app_meta(key, value)
-VALUES ('schema_version', '2')
-ON CONFLICT (key) DO UPDATE SET value = '2';
+VALUES ('schema_version', '3')
+ON CONFLICT (key) DO UPDATE SET value = '3';
 """
 
 

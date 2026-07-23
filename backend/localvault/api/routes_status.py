@@ -30,7 +30,7 @@ async def status(request: Request) -> StatusResponse:
         setup_required=user_count == 0,
         application_version="1.0.0",
         api_version="v1",
-        schema_version=2,
+        schema_version=3,
         port=ctx.config.port,
         network_host=_network_host(),
     )
