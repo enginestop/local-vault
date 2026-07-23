@@ -83,6 +83,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 @media (prefers-color-scheme: dark) {
   :root { color: #dbe4df; background: #101713; --ink: #e3ebe7; --muted: #92a099; --line: #334139; --surface: #1b2420; --canvas: #141c18; }
+  .new-button { background: #273a31; color: #e4eee8; border: 1px solid #3b5548; }
+  .new-button:hover { background: #315244; }
+  .new-button kbd { color: #b9c9c1; background: #1d2b25; border-color: #415249; }
+  .lock-button { background: #202b26; border-color: #3b4942; color: #d5e0da; }
+  .lock-button:hover { background: #2a3a32; }
+  .secondary { color: #d0ddd6; }
+  .secondary:hover { background: #2a3932; }
+  .danger-outline { background: #352524; border-color: #70433f; color: #f0aaa3; }
+  .danger-outline:hover { background: #4a2c29; }
   .main-area, .list-pane { background: var(--canvas); }.topbar, .detail-panel, .table-card, .card, .backup-stats > div, .modal { background: #1b2420; }.topbar { border-color: #334139; }.search-wrap, .select-control, .sort-control, .filter-button, .secondary, .pagination button, .field-box, .modal-form input, .modal-form select, .modal-form textarea, .setting-row select { background: #202b26; border-color: #3b4942; color: #cbd6d0; }.page-heading h1, .detail-identity h2, .name-cell strong, .card-title h2, .restore-card h2, .spec-card h2, .modal-header h2 { color: #e6eee9; }th { background: #202a25; border-color: #35423c; }td, .detail-section, .detail-top, .detail-actions, .card-title, .setting-row, .decision, .backup-row { border-color: #303d36; }.row-active { background: #25362e !important; }tbody tr:hover { background: #222e28; }.category-pill.kerja { background: #254438; }.category-pill.pribadi { background: #4c3920; }.category-pill.desain { background: #3c2e42; }.tags-cell span, .detail-tags span, .backup-type { background: #27322d; border-color: #3a4640; color: #aebcb5; }.notes, .field-box { color: #bdc9c3; }.http-banner { background: #493819; color: #f0d9a5; border-color: #6b5124; }.http-banner button { color: #f0d9a5; }.review-note, .spec-tags span { background: #23332b; border-color: #344c40; }.generated-box, .drop-zone { background: #202b26; }.modal-backdrop { background: rgba(3,8,6,.72); }
 }
 
