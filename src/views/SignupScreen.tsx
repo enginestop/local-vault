@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { LockKeyhole, ShieldCheck, KeyRound, HardDrive, ChevronDown, Eye, EyeOff, Globe, Wifi } from 'lucide-react'
+import { LockKeyhole, ShieldCheck, KeyRound, HardDrive, Eye, EyeOff, Globe, Wifi } from 'lucide-react'
 import { api, ApiError, type Lang, type SessionResult } from '../api'
 import { errorText, strengthOf } from '../utils/helpers'
 import './SignupScreen.css'
@@ -196,33 +196,16 @@ export function SignupScreen({ activeHost, lang, setLang, t, onSuccess, onScreen
               </div>
 
               {strength === 'weak' && master && (
-                <label className="signup-checkbox-group" style={{marginTop: '-10px'}}>
+                <label className="signup-checkbox-group">
                   <input 
                     type="checkbox" 
                     className="signup-checkbox"
                     checked={weakAck} 
                     onChange={(event) => setWeakAck(event.target.checked)} 
                   />
-                  <span className="signup-checkbox-label" style={{fontSize: '13px', color: '#8E9B94'}}>{t('weakPasswordAck')}</span>
+                  <span className="signup-checkbox-label">{t('weakPasswordAck')}</span>
                 </label>
               )}
-              
-              <div className="signup-form-group">
-                <label className="signup-label">{t('language')}</label>
-                <div className="signup-input-wrapper">
-                  <Globe size={18} className="signup-input-icon-left" />
-                  <select 
-                    className="signup-select"
-                    value={lang} 
-                    onChange={(event) => setLang(event.target.value as Lang)}
-                  >
-                    <option value="id">Bahasa Indonesia</option>
-                    <option value="en">English</option>
-                  </select>
-                  <ChevronDown size={18} className="signup-input-icon-right pointer-none" />
-                </div>
-              </div>
-
               <label className={`signup-option-card ${createRecovery ? 'active' : ''}`}>
                 <input 
                   type="checkbox" 

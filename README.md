@@ -210,8 +210,6 @@ localVault/
 - [documentation/SRS.md](documentation/SRS.md) — kontrak normatif dan acceptance
   test v1.
 
-## Lisensi
-
 ## Multi-user dan deployment
 
 Panel **Administrasi** hanya tersedia untuk Superadmin. Gunakan panel ini untuk

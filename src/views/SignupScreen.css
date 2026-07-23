@@ -2,8 +2,8 @@
 
 .signup-page {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  color: #F4F4F2;
-  background-color: #121C18;
+  color: #e2eee7;
+  background: radial-gradient(circle at 16% 12%, rgba(77, 151, 111, .12), transparent 32%), #0f1713;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -206,8 +206,8 @@
 
 .signup-card {
   width: 100%;
-  background-color: #16201b;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: #19261f;
+  border: 1px solid #30483c;
   border-radius: 18px;
   padding: 36px 32px;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.2);
@@ -317,6 +317,23 @@
 .signup-select option {
   background-color: #1A2520;
   color: #F4F4F2;
+}
+
+.signup-input:-webkit-autofill {
+  -webkit-text-fill-color: #F4F4F2 !important;
+  -webkit-box-shadow: 0 0 0 30px #16201b inset !important;
+  color: #F4F4F2 !important;
+  caret-color: #F4F4F2;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.signup-input:-webkit-autofill:hover,
+.signup-input:-webkit-autofill:focus,
+.signup-input:-webkit-autofill:active {
+  -webkit-text-fill-color: #F4F4F2 !important;
+  -webkit-box-shadow: 0 0 0 30px #16201b inset !important;
+  color: #F4F4F2 !important;
 }
 
 .signup-input:focus, .signup-select:focus {
@@ -519,4 +536,40 @@
   .signup-header {
     padding: 16px 24px;
   }
+}
+
+/* Explicit dark-forest tokens for first-run setup, regardless of OS theme. */
+.signup-page { background-color: #0f1713; color: #e2eee7; }
+.signup-highlight, .signup-card { background-color: #19261f; border-color: #30483c; }
+.signup-highlight-icon, .signup-feature-icon { background-color: #22382c; }
+.signup-input, .signup-select { background-color: #111b16; border-color: #3b5647; color: #e2eee7; }
+.signup-input:focus, .signup-select:focus { background-color: #172820; border-color: #70b38c; box-shadow: 0 0 0 3px rgba(112, 179, 140, .15); }
+.signup-option-card { background-color: #17251e; border-color: #30483c; }
+.signup-option-card.active { background-color: #203b2d; border-color: #4d8664; }
+.signup-option-card.warning { background-color: #3c301b; border-color: #675229; }
+.signup-footer { border-color: #30483c; }
+.signup-language-switcher select { background: #172820; border-color: #416653; color: #c6e4d0; }
+.signup-input:-webkit-autofill, .signup-input:-webkit-autofill:hover,
+.signup-input:-webkit-autofill:focus { -webkit-box-shadow: 0 0 0 30px #111b16 inset !important; -webkit-text-fill-color: #e2eee7 !important; }
+
+@media (max-width: 767px) {
+  .signup-header { padding-inline: 15px; }
+  .signup-container { padding-inline: 13px; }
+  .signup-card { padding: 24px 18px; border-radius: 14px; }
+  .signup-footer { align-items: flex-start; flex-wrap: wrap; gap: 10px; }
+}
+
+/* Baseline keterbacaan: label, bantuan, dan status tetap nyaman dibaca. */
+.signup-feature-text p,
+.signup-strength-label,
+.signup-strength-text,
+.signup-strength-hint,
+.signup-option-content span,
+.signup-footer-text,
+.signup-login-link { font-size: 12px; line-height: 1.5; }
+.signup-option-content strong, .signup-label { font-size: 13px; }
+.signup-error { font-size: 13px; line-height: 1.45; }
+
+@media (max-width: 767px) {
+  .signup-card-title { font-size: 24px; }
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Clipboard, Sparkles } from 'lucide-react'
 import { api, type Category, type Credential } from '../api'
+import { Dropdown } from './Dropdown'
 import { errorText } from '../utils/helpers'
 import { NativeDialog } from './NativeDialog'
 import { IconButton } from './IconButton'
@@ -63,7 +64,7 @@ export function CredentialDialog({ credential, startGenerator, categories, t, an
           <label>{t('name')}<input autoFocus required value={name} onChange={(event) => setName(event.target.value)} /></label>
           <div className="form-row">
             <label>{t('username')}<input value={username} onChange={(event) => setUsername(event.target.value)} /></label>
-            <label>{t('category')}<select value={category} onChange={(event) => setCategory(event.target.value)}><option value="">—</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+            <label>{t('category')}<Dropdown value={category} options={[{ value: '', label: '—' }, ...categories.map((item) => ({ value: item.id, label: item.name }))]} onChange={setCategory} ariaLabel={t('category')} /></label>
           </div>
           <label>URL<input value={url} onChange={(event) => setUrl(event.target.value)} /></label>
           <label>{t('password')}

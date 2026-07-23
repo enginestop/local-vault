@@ -24,6 +24,11 @@ __pycache__/
 # Dev & agent artifacts
 /.agents
 /.playwright-mcp
+/.claude
+
+# Local logs and configuration
+*.log
+*.local.json
 
 # Local test output (test source and configuration are tracked)
 /backend/.test-tmp*/

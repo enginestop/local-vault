@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Check, Database, HardDrive, KeyRound, LockKeyhole, RefreshCw, ShieldAlert, ShieldCheck, Wifi } from 'lucide-react'
+import { HardDrive, KeyRound, LockKeyhole, RefreshCw, ShieldAlert, ShieldCheck, Wifi } from 'lucide-react'
 import { api, type Lang, type SessionResult } from '../api'
 import { errorText, strengthOf } from '../utils/helpers'
 import type { Screen } from '../types'
@@ -43,7 +43,7 @@ export function AuthScreen({ screen, setupRequired, activeHost, lang, setLang, t
           <h1>{isRecover ? t('recover') : t('loginWelcome')}</h1>
           {!isRecover && <p className="auth-lead">{t('loginLead')}</p>}
           {!isRecover && <>
-            <div className="auth-vault-visual"><span className="auth-vault-ring"><LockKeyhole size={28} /></span><div><strong>{setupRequired ? t('vaultNotFound') : t('vaultFound')}</strong><span>{setupRequired ? t('firstSetupNeeded') : `${t('revision')} 184 · ${t('recoveryActive')}`}</span></div><Check size={18} /></div>
+            <div className="auth-vault-visual"><span className="auth-vault-ring"><LockKeyhole size={28} /></span><div><strong>{setupRequired ? t('vaultNotFound') : t('vaultFound')}</strong><span>{setupRequired ? t('firstSetupNeeded') : t('vaultFoundSub')}</span></div></div>
             <div className="auth-points">
               <div><span><HardDrive size={18} /></span><p><strong>{t('savedLocally')}</strong><small>{t('savedLocallySub')}</small></p></div>
               <div><span><ShieldCheck size={18} /></span><p><strong>{t('singleMasterPassword')}</strong><small>{t('singleMasterPasswordSub')}</small></p></div>
@@ -53,7 +53,7 @@ export function AuthScreen({ screen, setupRequired, activeHost, lang, setLang, t
         </section>
         <section className="auth-card">
           <div className="auth-card-heading"><span className="auth-mode-badge">{isRecover ? t('recover') : t('loginBadge')}</span><h2>{isRecover ? t('recover') : t('loginCardTitle')}</h2><p>{isRecover ? t('recoveryKey') : t('loginSubtitle')}</p></div>
-          {!isRecover && <div className="auth-vault-status"><span><Database size={18} /></span><div><strong>{setupRequired ? t('firstSetup') : t('vaultFound')}</strong><small>{setupRequired ? t('firstSetupNeeded') : `${t('revision')} 184 · ${t('recoveryActive')}`}</small></div><Check className="status-check" size={18} /></div>}
+
           <form className="auth-form" onSubmit={(event) => void submit(event)}>
             {isRecover && <label><span>{t('recoveryKey')}</span><div className="auth-input"><KeyRound size={18} /><input required value={recovery} onChange={(event) => setRecovery(event.target.value)} /></div></label>}
             {isLogin && <label><span>{t('usernameOrEmail')}</span><div className="auth-input"><KeyRound size={18} /><input required autoComplete="username" value={login} onChange={(event) => setLogin(event.target.value)} /></div></label>}
