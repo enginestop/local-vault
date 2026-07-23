@@ -127,7 +127,7 @@ export default function App() {
         const status = await api.status()
         if (cancelled) return
         setSetupRequired(status.setup_required)
-        if (status.network_host) setNetworkHost(`${status.network_host}:${status.port}`)
+        if (status.network_host) setNetworkHost(`${status.network_host}:${window.location.port || status.port}`)
         if (status.setup_required) { bootSettled.current = true; setToken(null); setScreen('login'); return }
         if (status.locked || !getToken()) { bootSettled.current = true; setToken(null); setScreen('login'); return }
         try { await api.current(); if (!cancelled) { bootSettled.current = true; await enterApp() } }
