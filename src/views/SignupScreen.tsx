@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { LockKeyhole, ShieldCheck, KeyRound, HardDrive, ShieldAlert, ChevronDown, Eye, EyeOff, Globe, Wifi } from 'lucide-react'
+import { LockKeyhole, ShieldCheck, KeyRound, HardDrive, ChevronDown, Eye, EyeOff, Globe, Wifi } from 'lucide-react'
 import { api, type Lang, type SessionResult } from '../api'
 import { errorText, strengthOf } from '../utils/helpers'
 import './SignupScreen.css'
@@ -7,6 +7,8 @@ import type { Screen } from '../types'
 
 export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: Lang; setLang: (lang: Lang) => void; t: (key: any) => string; onSuccess: (result: SessionResult) => void; onScreen: (screen: Screen) => void }) {
   const [master, setMaster] = useState('')
+  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [confirmation, setConfirmation] = useState('')
   const [createRecovery, setCreateRecovery] = useState(true)
   const [riskAck, setRiskAck] = useState(false)
@@ -28,7 +30,9 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
     setBusy(true); 
     setError('')
     try {
-      onSuccess(await api.setup({ 
+      onSuccess(await api.register({
+        username,
+        email,
         master_password: master, 
         confirm_master_password: confirmation, 
         create_recovery_key: createRecovery, 
@@ -43,15 +47,10 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
     }
   }
 
-  const isSubmitDisabled = busy || (!master) || (master !== confirmation) || (strength === 'weak' && !weakAck) || !riskAck
+  const isSubmitDisabled = busy || !username.trim() || !email.trim() || (!master) || (master !== confirmation) || (strength === 'weak' && !weakAck) || !riskAck
   
   return (
     <div className="signup-page">
-      <div className="signup-http-banner">
-        <ShieldAlert size={16} />
-        <span><strong>HTTP LAN tidak terenkripsi.</strong> Master password dapat terlihat oleh perangkat lain di jaringan. <a href="#">Pelajari risikonya &gt;</a></span>
-      </div>
-      
       <header className="signup-header">
         <div className="signup-brand">
           <div className="signup-brand-icon"><LockKeyhole size={18} /></div>
@@ -124,18 +123,33 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
           <div className="signup-card">
             <span className="signup-card-badge">SIGN UP • FIRST SETUP</span>
             <h2 className="signup-card-title">Buat vault baru</h2>
-            <p className="signup-card-subtitle">Tidak diperlukan email. Identitas pemilik hanya dilindungi master password.</p>
+            <p className="signup-card-subtitle">Username dan email digunakan sebagai identitas akun. Vault tetap dilindungi master password.</p>
             
             <form className="signup-form" onSubmit={(event) => void submit(event)}>
+              <div className="signup-form-group">
+                <label className="signup-label" htmlFor="signup-username">{t('usernameLabel')}</label>
+                <div className="signup-input-wrapper">
+                  <KeyRound size={18} className="signup-input-icon-left" />
+                  <input id="signup-username" required autoComplete="username" className="signup-input" value={username} onChange={(event) => setUsername(event.target.value)} placeholder={t('usernamePlaceholder')} />
+                </div>
+              </div>
+
+              <div className="signup-form-group">
+                <label className="signup-label" htmlFor="signup-email">{t('emailLabel')}</label>
+                <div className="signup-input-wrapper">
+                  <Globe size={18} className="signup-input-icon-left" />
+                  <input id="signup-email" required type="email" autoComplete="email" className="signup-input" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={t('emailPlaceholder')} />
+                </div>
+              </div>
               
               <div className="signup-form-group">
-                <label className="signup-label">Master password</label>
+                <label className="signup-label" htmlFor="signup-master">Master password</label>
                 <div className="signup-input-wrapper">
                   <LockKeyhole size={18} className="signup-input-icon-left" />
                   <input 
                     type={showMaster ? 'text' : 'password'} 
                     required 
-                    className="signup-input"
+                    id="signup-master" className="signup-input"
                     value={master} 
                     onChange={(event) => setMaster(event.target.value)} 
                     placeholder="Buat master password"
@@ -147,13 +161,13 @@ export function SignupScreen({ lang, setLang, t, onSuccess, onScreen }: { lang: 
               </div>
               
               <div className="signup-form-group">
-                <label className="signup-label">Konfirmasi master password</label>
+                <label className="signup-label" htmlFor="signup-confirm">Konfirmasi master password</label>
                 <div className="signup-input-wrapper">
                   <ShieldCheck size={18} className="signup-input-icon-left" />
                   <input 
                     type={showConfirm ? 'text' : 'password'} 
                     required 
-                    className="signup-input"
+                    id="signup-confirm" className="signup-input"
                     value={confirmation} 
                     onChange={(event) => setConfirmation(event.target.value)} 
                     placeholder="Ulangi master password"

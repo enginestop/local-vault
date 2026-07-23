@@ -4,12 +4,11 @@ LocalVault adalah password manager untuk satu pemilik. Satu proses pada komputer
 host menyimpan vault terenkripsi di PostgreSQL dan menyajikan antarmuka web ke
 browser di komputer yang sama atau perangkat lain pada LAN.
 
-> **Status validasi lokal (23 Juli 2026):** `npm test` (4 test), `npm run build`,
-> dan 61 test backend lulus. Test backend dijalankan terhadap PostgreSQL 18 lokal
-> dengan `DATABASE_URL` eksplisit. Ini adalah validasi source lokal, bukan klaim
-> bahwa seluruh release gate atau acceptance test SRS §15 sudah lulus. Clean-machine
-> lintas OS, fault/power-loss, endurance, dan validasi artefak release masih belum
-> tervalidasi. Lihat [VERIFICATION.md](VERIFICATION.md).
+> **Status validasi lokal (23 Juli 2026):** `npm test` (7 test) dan
+> `npm run build` lulus. Test backend tidak tersedia pada workspace saat ini,
+> sehingga tidak ada hasil pytest backend yang dapat dilaporkan. Ini adalah
+> validasi source lokal, bukan klaim bahwa seluruh acceptance test SRS §15 sudah
+> lulus.
 
 ## Fitur utama
 
@@ -23,7 +22,7 @@ browser di komputer yang sama atau perangkat lain pada LAN.
 - backup `.lvbak` terenkripsi, snapshot otomatis, retensi, dan restore;
 - sinkronisasi antartab/perangkat melalui WebSocket;
 - UI Indonesia/English, tema terang/gelap, dan layout responsif;
-- launcher native dengan tray, daftar alamat LAN, lock-all, autostart, dan
+- launcher host lokal/native dengan tray, daftar alamat LAN, lock-all, autostart, dan
   shutdown tertib.
 
 ## Batas keamanan yang wajib dipahami
@@ -50,43 +49,19 @@ secret yang dibuka. Karena itu:
 
 Detail lengkap tersedia di [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
 
-## Menjalankan paket portable
+## Alur akun dan login
 
-Target paket v1 adalah Windows 11 x64, macOS 14+ x64/arm64, dan Ubuntu 24.04
-x64. Pengguna paket portable tidak memerlukan Python, Node.js, atau package
-manager. PostgreSQL harus tersedia dan dapat diakses melalui `DATABASE_URL`.
+Halaman awal selalu menampilkan login. Pada database kosong, pilih **Buat akun
+pertama**, lalu isi username, email, master password, bahasa, pilihan recovery
+key, dan acknowledgement risiko HTTP LAN. Form tersebut membuat akun melalui
+`/api/v1/register`, lalu langsung membuka vault.
 
-1. Ekstrak arsip release ke filesystem lokal yang writable.
-2. Jalankan `LocalVault.exe`, `LocalVault.app`, atau executable `LocalVault` untuk
-   platform terkait.
-3. Launcher membuat `LocalVault-Data` di samping launcher, menjalankan server,
-   menampilkan tray, dan membuka browser default.
-4. Buka alamat loopback atau salin alamat IPv4 LAN dari menu tray. Port awalnya
-   `8741`; server bind ke seluruh alamat IPv4 host (`0.0.0.0`). Firewall OS tetap
-   dapat membatasi akses.
-5. Gunakan menu tray untuk lock semua sesi atau menghentikan LocalVault. Jangan
-   mematikan proses secara paksa ketika mutasi/restore sedang berlangsung.
-
-Hanya satu proses boleh membuka satu `LocalVault-Data`. Direktori data harus
-mendukung exclusive lock, `fsync`, dan atomic rename; network share yang tidak
-dapat menjamin semantik tersebut tidak didukung.
-
-### Data, backup, recovery, dan upgrade
-
-`LocalVault-Data` berisi konfigurasi, backup terenkripsi, log, dan instance lock.
-Envelope vault disimpan di PostgreSQL yang ditentukan oleh `DATABASE_URL`.
-Jangan menghapus atau mengganti folder ini ketika memperbarui aplikasi.
-
-- Simpan recovery key di tempat terpisah. Tanpa master password atau recovery
-  key yang valid, vault tidak dapat dipulihkan.
-- Backup `.lvbak` tetap terenkripsi, tetapi retensi lokal bukan pengganti salinan
-  backup eksternal.
-- Backup historis dapat memerlukan master password/recovery key yang berlaku saat
-  snapshot dibuat.
-- Untuk upgrade, hentikan LocalVault dari tray, pertahankan `LocalVault-Data`,
-  ganti hanya artefak aplikasi, lalu jalankan versi baru.
-
-Panduan restore dan upgrade: [docs/RECOVERY_AND_UPGRADE.md](docs/RECOVERY_AND_UPGRADE.md).
+Setelah akun pertama dibuat, setup ditutup dan tombol pembuatan akun tidak lagi
+ditampilkan. Akses berikutnya menggunakan username atau email serta master
+password melalui login. Recovery key hanya ditampilkan satu kali jika opsi
+recovery diaktifkan; simpan di tempat aman karena LocalVault tidak menyediakan
+pemulihan oleh pihak ketiga. HTTP LAN tidak terenkripsi, sehingga setup dan
+login hanya boleh dilakukan pada jaringan tepercaya.
 
 ## Development dari source
 
@@ -97,7 +72,7 @@ Baseline yang digunakan CI:
   `22.12.0+` pada major yang lebih baru.
 - PostgreSQL 18 lokal untuk menjalankan backend dari source dan integration test.
 
-Dependency production, development, dan packaging dipisahkan di
+Dependency runtime dan development dipisahkan di
 `backend/requirements-*.txt`. `backend/requirements.lock` mengunci dependency
 transitif beserta hash; `package-lock.json` adalah lockfile frontend.
 
@@ -163,10 +138,11 @@ urutan berikut dari dua atau tiga terminal sesuai kebutuhan.
    ```
 
 `run.py` menjalankan server ASGI langsung pada port `8741` dan bind ke seluruh
-alamat IPv4 host (`0.0.0.0`). Launcher native menjalankan `QApplication`/tray
-pada main thread dan Uvicorn pada worker thread. Dalam mode source, konfigurasi,
-backup, dan log dibuat di `backend/LocalVault-Data`, sedangkan database PostgreSQL
-dibaca dari `DATABASE_URL`. Jangan gunakan data nyata sebagai fixture pengujian.
+alamat IPv4 host (`0.0.0.0`). Host launcher lokal menjalankan
+`QApplication`/tray pada main thread dan Uvicorn pada worker thread. Konfigurasi,
+backup, log, dan instance lock disimpan pada direktori `LOCALVAULT_DATA_DIR`;
+default source adalah `backend/LocalVault-Data`. Database PostgreSQL dibaca dari
+`DATABASE_URL`. Jangan gunakan data nyata sebagai fixture pengujian.
 
 Buka URL yang ditampilkan Vite (umumnya `http://127.0.0.1:5173`). Proxy development
 meneruskan request `/api` ke `http://127.0.0.1:8741`.
@@ -195,8 +171,9 @@ cd backend
 .venv313/bin/python -m pytest -q
 ```
 
-Validasi lokal saat ini menghasilkan 61 test backend lulus. Hasil ini tidak
-menutup gate clean-machine, fault/power-loss, endurance, atau release lintas OS.
+Test backend tidak tersedia pada workspace saat ini dan tidak dijalankan oleh
+perintah di atas. Hasil frontend juga tidak menutup seluruh acceptance test SRS
+§15.
 
 Playwright memerlukan browser test yang sesuai. Instalasinya dapat dilakukan
 dengan `npx playwright install` pada mesin development/CI. Test wajib memakai
@@ -208,62 +185,22 @@ Audit dependency Python yang digunakan dalam verifikasi:
 uvx pip-audit -r backend/requirements.lock
 ```
 
-Hasil pengujian yang telah dan belum ditutup dicatat di
-[VERIFICATION.md](VERIFICATION.md). Kelulusan test lokal tidak dengan sendirinya
-menyatakan seluruh acceptance test SRS §15 lulus.
-
-## Membuat artefak release
-
-PyInstaller tidak mendukung satu build lintas platform sebagai bukti
-kompatibilitas. Jalankan build pada masing-masing OS target setelah dependency
-dari lockfile terpasang.
-
-Sebelum build, hentikan `npm run dev`/Vite dan instance LocalVault dari source.
-`npm ci` harus dapat mengganti `node_modules` tanpa file yang masih dikunci.
-Script Windows menggunakan executable packaging dari virtual environment secara
-langsung dan akan berhenti pada tahap pertama yang gagal.
-
-Windows PowerShell:
-
-```powershell
-.\scripts\release.ps1
-```
-
-macOS/Linux:
-
-```bash
-./scripts/release.sh
-```
-
-Script membangun frontend lebih dahulu, membundel launcher/backend/aset dengan
-PyInstaller, membuat arsip portable, SBOM Python CycloneDX, dan `SHA256SUMS`.
-Output Windows berada di `release/LocalVault-windows-x64.zip`; ekstrak seluruh
-isi ZIP sebelum menjalankan `LocalVault.exe`—jangan menjalankan executable
-langsung dari dalam ZIP atau memisahkannya dari folder `_internal`.
-Artefak baru boleh dipublikasikan setelah release matrix, security audit, dan
-seluruh gate SRS yang berlaku lulus terhadap byte artefak yang sama.
-
 ## Struktur repository
 
 ```text
 localVault/
 ├── backend/
 │   ├── localvault/          # FastAPI, domain, crypto, services, launcher
-│   ├── tests/               # pytest + contract/regression/launcher tests
-│   ├── LocalVault.spec      # konfigurasi PyInstaller
 │   └── requirements*.txt    # dependency direct dan lock transitif
 ├── src/                     # React, TypeScript, i18n, dan unit tests
 ├── tests/e2e/               # Playwright workflows
-├── scripts/                 # build release per platform
 ├── docs/                    # threat model serta recovery/upgrade
-├── SRS.md                   # kontrak normatif LocalVault v1
-└── VERIFICATION.md          # bukti dan gate release
+└── SRS.md                   # kontrak normatif LocalVault v1
 ```
 
 ## Dokumentasi
 
 - [SRS.md](SRS.md) — kontrak normatif dan acceptance test v1;
-- [VERIFICATION.md](VERIFICATION.md) — status bukti pengujian;
 - [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) — batas perlindungan dan risiko;
 - [docs/RECOVERY_AND_UPGRADE.md](docs/RECOVERY_AND_UPGRADE.md) — backup, restore,
   recovery, dan upgrade aman.

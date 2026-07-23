@@ -47,6 +47,12 @@ class SessionResult(BaseModel):
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(request: Request, body: RegisterRequest) -> SessionResult:
     ctx: AppContext = request.app.state.ctx
+    username = body.username.strip()
+    email = body.email.strip().lower()
+    if not username:
+        raise errors.ValidationError("Username must not be empty")
+    if not email:
+        raise errors.ValidationError("Email must not be empty")
     if not body.http_lan_risk_acknowledged:
         raise errors.ValidationError("HTTP LAN risk acknowledgement is required")
     try:
@@ -58,8 +64,8 @@ async def register(request: Request, body: RegisterRequest) -> SessionResult:
     except PasswordPolicyError as exc:
         raise errors.ValidationError(str(exc)) from exc
     user = await auth_register(
-        username=body.username.strip(),
-        email=body.email.strip().lower(),
+        username=username,
+        email=email,
         master_password=body.master_password,
     )
     vault = await ctx.vault.setup(
