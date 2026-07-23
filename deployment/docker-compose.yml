@@ -7,6 +7,11 @@ services:
       POSTGRES_PASSWORD: localvault
     volumes:
       - localvault-db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d localvault -U localvault"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
   app:
     build:
       context: ..
@@ -15,7 +20,9 @@ services:
       LOCALVAULT_DATA_DIR: /app/data
     env_file: .env
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    restart: unless-stopped
     ports:
       - "8741:8741"
     volumes:
