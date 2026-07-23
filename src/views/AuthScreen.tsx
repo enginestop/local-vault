@@ -69,7 +69,7 @@ export function AuthScreen({ screen, setupRequired, activeHost, lang, setLang, t
             <button className="auth-submit" disabled={busy || (!isLogin && strength === 'weak' && !weakAck)}><LockKeyhole size={16} />{busy ? t('working') : isLogin ? t('openVault') : t('recover')}</button>
           </form>
           {error && <p className="form-error">{error}</p>}
-          <div className="auth-card-footer"><p className="auth-switch-text"><span>{setupRequired ? t('notConfiguredYet') : t('alreadyConfigured')}</span><span className="auth-switch-actions"><button type="button" className="link-action" onClick={() => onScreen('signup')}>{setupRequired ? t('createFirstAccount') : t('signup')} ›</button><button type="button" className="link-action" onClick={() => onScreen('recover')}>{t('useRecovery')}</button></span></p><div className="auth-security-notice"><ShieldAlert className="notice-icon" size={17} /><div><strong>{t('noLoginThrottleTitle')}</strong><p>{t('noLoginThrottleText')}</p></div></div></div>
+          <div className="auth-card-footer"><p className="auth-switch-text"><span>{setupRequired ? t('notConfiguredYet') : t('alreadyConfigured')}</span><button type="button" className="link-action" onClick={() => onScreen('signup')}>{setupRequired ? t('createFirstAccount') : t('signup')} ›</button></p><div className="auth-security-notice"><ShieldAlert className="notice-icon" size={17} /><div><strong>{t('noLoginThrottleTitle')}</strong><p>{t('noLoginThrottleText')}</p></div></div></div>
           {isRecover && <button type="button" className="link-button" onClick={() => onScreen('login')}>{t('switchToLogin')}</button>}
         </section>
       </main>
