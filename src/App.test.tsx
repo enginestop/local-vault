@@ -9,9 +9,8 @@ describe('application boot', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ setup_required: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
   })
 
-  it('uses Indonesian by default and renders the login screen', async () => {
+  it('uses Indonesian by default and renders the setup screen', async () => {
     render(<App />)
-    expect(await screen.findByText('Masuk ke LocalVault')).toBeInTheDocument()
-    expect(screen.getByText('Belum punya akun?')).toBeInTheDocument()
+    expect(await screen.findByText('Buat vault baru')).toBeInTheDocument()
   })
 })

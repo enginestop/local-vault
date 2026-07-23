@@ -240,6 +240,10 @@ async def reset_vault(request: Request, body: ResetVault) -> dict:
     )
     await ctx.backups.write_backup(user_id, env, kind="pre_operation", operation="reset_vault")
     await ctx.vault._write_envelope(user_id, new_env)
+    # The vault envelope and the user authentication record are separate
+    # stores.  Update both before invalidating the current session so the new
+    # password works immediately after reset and relock.
+    await set_master_password(user_id, body.new_master_password)
     ctx.sessions.lock_all()
     ctx.vault.lock_all()
     return {"reset": True, "recovery_key": rec_key}

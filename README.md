@@ -4,10 +4,12 @@ LocalVault adalah password manager untuk satu pemilik. Satu proses pada komputer
 host menyimpan vault terenkripsi di PostgreSQL dan menyajikan antarmuka web ke
 browser di komputer yang sama atau perangkat lain pada LAN.
 
-> **Status pengembangan:** source code dan pengujian lokal tersedia, tetapi build
-> v1 belum boleh dianggap sebagai release tervalidasi. Sejumlah gate SRS §15 masih
-> memerlukan pengujian browser nyata, clean-machine lintas OS, fault/power-loss,
-> performa, dan hash artefak final. Lihat [VERIFICATION.md](VERIFICATION.md).
+> **Status validasi lokal (23 Juli 2026):** `npm test` (4 test), `npm run build`,
+> dan 61 test backend lulus. Test backend dijalankan terhadap PostgreSQL 18 lokal
+> dengan `DATABASE_URL` eksplisit. Ini adalah validasi source lokal, bukan klaim
+> bahwa seluruh release gate atau acceptance test SRS §15 sudah lulus. Clean-machine
+> lintas OS, fault/power-loss, endurance, dan validasi artefak release masih belum
+> tervalidasi. Lihat [VERIFICATION.md](VERIFICATION.md).
 
 ## Fitur utama
 
@@ -90,10 +92,10 @@ Panduan restore dan upgrade: [docs/RECOVERY_AND_UPGRADE.md](docs/RECOVERY_AND_UP
 
 Baseline yang digunakan CI:
 
-- Python 3.11;
+- Python 3.13;
 - Node.js 24.x. Vite yang dipin memerlukan minimal Node `20.19.0` atau
   `22.12.0+` pada major yang lebih baru.
-- PostgreSQL 16+ untuk menjalankan backend dari source.
+- PostgreSQL 18 lokal untuk menjalankan backend dari source dan integration test.
 
 Dependency production, development, dan packaging dipisahkan di
 `backend/requirements-*.txt`. `backend/requirements.lock` mengunci dependency
@@ -102,41 +104,69 @@ transitif beserta hash; `package-lock.json` adalah lockfile frontend.
 ### Setup Windows PowerShell
 
 ```powershell
-cd backend
-py -3.11 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements.lock
-cd ..
+py -3.13 -m venv backend/.venv313
+& .\backend\.venv313\Scripts\python.exe -m pip install --require-hashes -r backend/requirements.lock
 npm ci
-npm run build
-$env:DATABASE_URL = "postgresql://localvault:localvault@127.0.0.1:5432/localvault"
-cd backend
-.\.venv\Scripts\python.exe run.py
 ```
 
 ### Setup macOS/Linux
 
 ```bash
-python3.11 -m venv backend/.venv
-backend/.venv/bin/python -m pip install --require-hashes -r backend/requirements.lock
+python3.13 -m venv backend/.venv313
+backend/.venv313/bin/python -m pip install --require-hashes -r backend/requirements.lock
 npm ci
-npm run build
-export DATABASE_URL="postgresql://localvault:localvault@127.0.0.1:5432/localvault"
-cd backend
-.venv/bin/python run.py
 ```
 
-`run.py` menjalankan server ASGI langsung. Launcher native menjalankan
-`QApplication`/tray pada main thread dan Uvicorn pada worker thread. Dalam mode
-source, konfigurasi, backup, dan log dibuat di `backend/LocalVault-Data`,
-sedangkan database PostgreSQL dibaca dari `DATABASE_URL`. Jangan gunakan data
-nyata sebagai fixture pengujian.
+Sebelum menjalankan backend, pastikan PostgreSQL 18 aktif, menerima koneksi pada
+`127.0.0.1:5432`, dan database `localvault` serta user `localvault` tersedia.
+Periksa konektivitas dengan:
 
-Untuk hot reload frontend, biarkan launcher/backend berjalan, lalu dari root
-repository jalankan:
+```powershell
+pg_isready -h 127.0.0.1 -p 5432 -d localvault -U localvault
+```
 
 ```bash
-npm run dev
+pg_isready -h 127.0.0.1 -p 5432 -d localvault -U localvault
 ```
+
+Backend source wajib dijalankan dengan `DATABASE_URL` lokal eksplisit. Jalankan
+urutan berikut dari dua atau tiga terminal sesuai kebutuhan.
+
+1. Di terminal backend, dari root repository:
+
+   Windows PowerShell:
+
+   ```powershell
+   $env:DATABASE_URL = "postgresql://localvault:localvault@127.0.0.1:5432/localvault"
+   Set-Location backend
+   & .\.venv313\Scripts\python.exe run.py
+   ```
+
+   macOS/Linux:
+
+   ```bash
+   export DATABASE_URL="postgresql://localvault:localvault@127.0.0.1:5432/localvault"
+   cd backend
+   .venv313/bin/python run.py
+   ```
+
+2. Di terminal lain, dari root repository, build frontend:
+
+   ```bash
+   npm run build
+   ```
+
+3. Untuk hot reload frontend, biarkan backend berjalan dan jalankan dari root:
+
+   ```bash
+   npm run dev
+   ```
+
+`run.py` menjalankan server ASGI langsung pada port `8741` dan bind ke seluruh
+alamat IPv4 host (`0.0.0.0`). Launcher native menjalankan `QApplication`/tray
+pada main thread dan Uvicorn pada worker thread. Dalam mode source, konfigurasi,
+backup, dan log dibuat di `backend/LocalVault-Data`, sedangkan database PostgreSQL
+dibaca dari `DATABASE_URL`. Jangan gunakan data nyata sebagai fixture pengujian.
 
 Buka URL yang ditampilkan Vite (umumnya `http://127.0.0.1:5173`). Proxy development
 meneruskan request `/api` ke `http://127.0.0.1:8741`.
@@ -150,12 +180,23 @@ npm run test:e2e
 npm run audit
 ```
 
-Backend (jalankan dari direktori `backend` dengan virtual environment aktif dan
-PostgreSQL tersedia):
+Backend (jalankan dari direktori `backend` dengan PostgreSQL tersedia dan
+`DATABASE_URL` lokal eksplisit):
+
+```powershell
+$env:DATABASE_URL = "postgresql://localvault:localvault@127.0.0.1:5432/localvault"
+Set-Location backend
+& .\.venv313\Scripts\python.exe -m pytest -q
+```
 
 ```bash
-python -m pytest -q
+export DATABASE_URL="postgresql://localvault:localvault@127.0.0.1:5432/localvault"
+cd backend
+.venv313/bin/python -m pytest -q
 ```
+
+Validasi lokal saat ini menghasilkan 61 test backend lulus. Hasil ini tidak
+menutup gate clean-machine, fault/power-loss, endurance, atau release lintas OS.
 
 Playwright memerlukan browser test yang sesuai. Instalasinya dapat dilakukan
 dengan `npx playwright install` pada mesin development/CI. Test wajib memakai
@@ -179,7 +220,7 @@ dari lockfile terpasang.
 
 Sebelum build, hentikan `npm run dev`/Vite dan instance LocalVault dari source.
 `npm ci` harus dapat mengganti `node_modules` tanpa file yang masih dikunci.
-Script Windows menggunakan executable packaging dari `backend/.venv` secara
+Script Windows menggunakan executable packaging dari virtual environment secara
 langsung dan akan berhenti pada tahap pertama yang gagal.
 
 Windows PowerShell:

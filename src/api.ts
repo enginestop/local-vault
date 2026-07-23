@@ -111,6 +111,17 @@ export interface ExportResult {
   filename: string
 }
 
+export interface StatusResult {
+  setup_required: boolean
+  application_version: string
+  api_version: string
+  schema_version: number
+  port: number
+  locked?: boolean
+  recovery_enabled?: boolean
+  http_lan_warning?: boolean
+}
+
 const TOKEN_KEY = 'lv_token'
 const TAB_KEY = 'lv_tab_id'
 
@@ -267,12 +278,21 @@ async function downloadRequest(method: string, path: string, body?: unknown): Pr
 }
 
 export const api = {
-  status: () => request<{ application_version: string; api_version: string; schema_version: number; port: number }>('GET', '/api/v1/status'),
+  status: () => request<StatusResult>('GET', '/api/v1/status'),
+
+  setup: (payload: Record<string, unknown>) =>
+    request<SessionResult>('POST', '/api/v1/setup', { body: { ...payload, tab_instance_id: getTabId() } }),
 
   register: (payload: Record<string, unknown>) => request<SessionResult>('POST', '/api/v1/register', { body: { ...payload, tab_instance_id: getTabId() } }),
 
   login: (login: string, master_password: string) =>
     request<SessionResult>('POST', '/api/v1/sessions/login', { body: { login, master_password, tab_instance_id: getTabId() } }),
+
+  unlock: (master_password: string) =>
+    request<SessionResult>('POST', '/api/v1/sessions/unlock', { body: { master_password, tab_instance_id: getTabId() } }),
+
+  recover: (payload: Record<string, unknown>) =>
+    request<SessionResult>('POST', '/api/v1/sessions/recover', { body: { ...payload, tab_instance_id: getTabId() } }),
 
   logout: () => request<void>('POST', '/api/v1/sessions/logout'),
 

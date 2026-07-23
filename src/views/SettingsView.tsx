@@ -53,14 +53,21 @@ export function SettingsView({ lang, settings, categories, tags, vaultRevision, 
     } catch (error) { announce(errorText(error)) } finally { setBusy(false) } 
   }
   
-  async function recoveryAction(action: 'enable' | 'rotate' | 'disable'): Promise<void> { 
-    if (action === 'disable' && !confirm(t('confirmDisableRecovery'))) return; 
+  async function recoveryAction(action: 'enable' | 'rotate'): Promise<void> {
     setBusy(true); 
     try { 
-      const result = await api.recoveryAction(action, current); 
+      const result = await api.recoveryAction(action, current);
       if (result.recovery_key) showRecovery(result.recovery_key); 
       await load() 
     } catch (error) { announce(errorText(error)) } finally { setBusy(false) } 
+  }
+
+  async function disableRecovery(): Promise<void> {
+    if (!confirm(t('confirmDisableRecovery'))) return
+    setBusy(true)
+    try { await api.disableRecovery(current); await load() }
+    catch (error) { announce(errorText(error)) }
+    finally { setBusy(false) }
   }
   
   async function reset(): Promise<void> { 
@@ -160,7 +167,7 @@ export function SettingsView({ lang, settings, categories, tags, vaultRevision, 
                 {security?.recovery_enabled ? (
                   <>
                     <button className="secondary" disabled={busy} onClick={() => void recoveryAction('rotate')}>{t('rotateRecovery')}</button>
-                    <button className="danger-outline" disabled={busy} onClick={() => void recoveryAction('disable')}>{t('disableRecovery')}</button>
+                    <button className="danger-outline" disabled={busy} onClick={() => void disableRecovery()}>{t('disableRecovery')}</button>
                   </>
                 ) : (
                   <button className="secondary" disabled={busy} onClick={() => void recoveryAction('enable')}>{t('enableRecovery')}</button>

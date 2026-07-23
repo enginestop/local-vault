@@ -86,6 +86,17 @@ class VaultService:
         state = self._user_state(user_id)
         return state["plaintext"]
 
+    @property
+    def plaintext(self) -> VaultPayload:
+        """In-process compatibility accessor for the currently unlocked vault.
+
+        This never serializes or exposes plaintext through the HTTP API; API
+        routes continue to use the user-scoped ``get_plaintext`` method.
+        """
+        if len(self._user_states) != 1:
+            raise errors.VaultLocked()
+        return next(iter(self._user_states.values()))["plaintext"]
+
     def get_dek(self, user_id: str) -> bytes:
         state = self._user_state(user_id)
         return state["dek"]
@@ -306,7 +317,7 @@ class VaultService:
     async def mutate(
         self,
         user_id: str,
-        fn,
+        fn=None,
         pre_operation: str | None = None,
         *,
         event_type: str = "vault.reload_required",
@@ -314,6 +325,14 @@ class VaultService:
         entity_id: str | None = None,
         entity_revision: int | None = None,
     ) -> tuple[VaultPayload, int]:
+        # Preserve the old in-process helper shape ``mutate(fn)`` for callers
+        # that operate on the single currently unlocked vault.  HTTP routes
+        # use the explicit user-scoped form below.
+        if fn is None and callable(user_id):
+            fn = user_id
+            if len(self._user_states) != 1:
+                raise errors.VaultLocked()
+            user_id = next(iter(self._user_states))
         async with self._lock:
             state = self._user_state(user_id)
             current = state["plaintext"]

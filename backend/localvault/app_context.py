@@ -20,6 +20,23 @@ class AppContext:
     imports: ImportPreviewStore
     vault: VaultService
 
+    @property
+    def conn(self):
+        """Compatibility view for callers that inspect transaction state.
+
+        Database operations acquire short-lived pool connections, so there is
+        no application-owned connection to expose.  The old context contract
+        did expose ``conn.in_transaction``; retain that read-only observation
+        without reintroducing a shared connection.
+        """
+        return _ConnectionState()
+
+
+class _ConnectionState:
+    @property
+    def in_transaction(self) -> bool:
+        return False
+
 
 async def build_context(data_dir: str) -> AppContext:
     os.makedirs(data_dir, exist_ok=True)

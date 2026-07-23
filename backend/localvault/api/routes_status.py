@@ -23,6 +23,7 @@ async def status(request: Request) -> StatusResponse:
     pool = get_pool()
     async with pool.acquire() as conn:
         user_count = await conn.fetchval("SELECT count(*) FROM users")
+        owner_id = await conn.fetchval("SELECT id FROM users ORDER BY created_at LIMIT 1")
     return StatusResponse(
         setup_required=user_count == 0,
         application_version="1.0.0",

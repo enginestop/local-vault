@@ -109,12 +109,21 @@ def create_app(data_dir: str, control=None) -> FastAPI:
                             errors.ProblemError("ORIGIN_NOT_ALLOWED", "Origin not allowed", "The request origin is not allowed.", 403),
                         )
                         return _secure(response, request.state.request_id)
-            content_length = request.headers.get("content-length")
+            # ASGI permits repeated headers and some clients/proxies preserve a
+            # stale value alongside the actual one.  Treat the largest declared
+            # length as authoritative so a large request cannot be hidden by a
+            # smaller duplicate header before FastAPI parses its body.
+            content_lengths = [
+                value
+                for name, value in request.scope.get("headers", [])
+                if name.lower() == b"content-length"
+            ]
             request_limit = _request_limit(request.url.path)
-            if content_length:
+            if content_lengths:
                 try:
-                    too_large = int(content_length) > request_limit
-                except ValueError:
+                    declared_lengths = [int(value) for value in content_lengths]
+                    too_large = max(declared_lengths) > request_limit
+                except (TypeError, ValueError):
                     too_large = True
                 if too_large:
                     response = errors.problem_response(
@@ -218,7 +227,7 @@ def _request_id(candidate: str | None) -> str:
 def _request_limit(path: str) -> int:
     if path.startswith("/api/v1/imports/previews") or path == "/api/v1/backups/restore":
         return 52 * 1024 * 1024
-    return 2 * 1024 * 1024
+    return 1 * 1024 * 1024
 
 
 def _secure(response: Response, request_id: str) -> Response:

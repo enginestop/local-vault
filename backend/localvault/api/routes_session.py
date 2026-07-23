@@ -21,6 +21,7 @@ class RegisterRequest(RequestModel):
     master_password: str
     confirm_master_password: str
     weak_password_acknowledged: bool = False
+    http_lan_risk_acknowledged: bool = False
     create_recovery_key: bool = False
     language: str = "id"
     tab_instance_id: str = str(uuid.uuid4())
@@ -46,6 +47,8 @@ class SessionResult(BaseModel):
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(request: Request, body: RegisterRequest) -> SessionResult:
     ctx: AppContext = request.app.state.ctx
+    if not body.http_lan_risk_acknowledged:
+        raise errors.ValidationError("HTTP LAN risk acknowledgement is required")
     try:
         validate_master_password(
             body.master_password,
@@ -84,6 +87,7 @@ class LegacySetupRequest(RequestModel):
     create_recovery_key: bool = False
     language: str = "id"
     weak_password_acknowledged: bool = False
+    http_lan_risk_acknowledged: bool = False
     tab_instance_id: str = str(uuid.uuid4())
     client_label: str = "web"
 
@@ -101,6 +105,8 @@ async def _legacy_user(request: Request):
 @router.post("/setup", status_code=status.HTTP_201_CREATED)
 async def legacy_setup(request: Request, body: LegacySetupRequest) -> dict:
     ctx: AppContext = request.app.state.ctx
+    if not body.http_lan_risk_acknowledged:
+        raise errors.ValidationError("HTTP LAN risk acknowledgement is required")
     try:
         validate_master_password(body.master_password, body.confirm_master_password, body.weak_password_acknowledged)
     except PasswordPolicyError as exc:

@@ -124,7 +124,7 @@ export default function App() {
       try {
         const status = await api.status()
         if (cancelled) return
-        if (!status.setup_completed) { bootSettled.current = true; setScreen('signup'); return }
+        if (status.setup_required) { bootSettled.current = true; setScreen('signup'); return }
         if (status.locked || !getToken()) { bootSettled.current = true; setToken(null); setScreen('login'); return }
         try { await api.current(); if (!cancelled) { bootSettled.current = true; await enterApp() } }
         catch { if (!cancelled) { bootSettled.current = true; setToken(null); setScreen('login') } }
