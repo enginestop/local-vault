@@ -67,24 +67,24 @@ def create_app(data_dir: str, control=None) -> FastAPI:
 
     app = FastAPI(title="LocalVault", version="2.0.0", lifespan=lifespan)
 
+    cors_origins: list[str] = []
     if PUBLIC_URL:
         parsed = urlparse(PUBLIC_URL)
         origin = f"{parsed.scheme}://{parsed.netloc}"
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=[origin],
-            allow_methods=["*"],
-            allow_headers=["*"],
-            allow_credentials=True,
-        )
-    else:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=[],
-            allow_methods=["*"],
-            allow_headers=["*"],
-            allow_credentials=False,
-        )
+        cors_origins.append(origin)
+    extra_origins = os.environ.get("CORS_ORIGINS", "")
+    if extra_origins:
+        for entry in extra_origins.split(","):
+            entry = entry.strip()
+            if entry:
+                cors_origins.append(entry)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins or ["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+        allow_credentials=bool(cors_origins),
+    )
 
     @app.middleware("http")
     async def security_middleware(request: Request, call_next):
@@ -265,4 +265,10 @@ def _allowed_hosts() -> set[str]:
         pub_host = parsed.hostname
         if pub_host:
             hosts.add(pub_host.lower())
+    trusted = os.environ.get("TRUSTED_HOSTS", "")
+    if trusted:
+        for entry in trusted.split(","):
+            entry = entry.strip().lower()
+            if entry:
+                hosts.add(entry)
     return hosts
